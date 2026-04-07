@@ -3,6 +3,7 @@
 > This document covers the backend half of the project.
 > Amazon Q is responsible for this piece.
 > Qwen Code Copilot is responsible for the Frontend/Extension piece (see FRONTEND_PIECE.md).
+> When Amazon Q delivers the real core-engine.js, it drops straight in — no frontend changes needed.
 
 ---
 
@@ -12,63 +13,46 @@ Everything that runs in Node.js with no VS Code dependency:
 
 | File | Responsibility |
 |---|---|
-| `src/core-engine.js` | Singleton AI router — all providers go through here |
-| `src/provider-registry.js` | Provider definitions, model catalog, local detection |
-| `src/local-agent.js` | Autonomous task agent — plans, executes, self-corrects |
-| `src/mcp-server.js` | MCP protocol server (stdio only) |
-| `src/concept-to-reality.js` | Interactive guided build session (CLI) |
-| `src/cli.js` | Full CLI tool — analyze, chat, vibecode, server, daemon |
+| `src/core-engine.js` | Singleton AI router — all providers, retry, streaming, health, session condense |
+| `src/provider-registry.js` | Provider definitions, model catalog, local detection, model download |
+| `src/local-agent.js` | Autonomous agent — natural language REPL, abort, plan, execute, verify |
+| `src/mcp-server.js` | MCP protocol server (stdio JSON-RPC only) |
+| `src/concept-to-reality.js` | Interactive guided build session — clarify → spec → confirm → build |
+| `src/cli.js` | Full CLI — analyze, chat, vibecode, server, concept, config, providers, models |
 
 ---
 
 ## Current Status
 
-### Working
-- CLI commands: `analyze`, `chat`, `vibecode`, `config`, `test-connection`, `version`
-- MCP server in stdio mode (JSON-RPC over stdin/stdout)
-- Provider registry with all 9 providers defined
-- Model catalog with 7 downloadable GGUF models
-- Core engine with OpenAI-compatible, Anthropic, and Google API formats
-- Concept-to-reality session flow (clarify → spec → build)
-- Local agent skeleton (plan → execute → verify loop)
+### Completed
+- `core-engine.js` — single AI router for all providers, exponential backoff retry (429/503/502), real SSE streaming with fallback, `condenseSession()`, `checkProviderHealth()` with 60s cache, config auto-repair on corrupt JSON, `reload()` for hot config refresh
+- `local-agent.js` — pure Node.js `gatherContext()` (no shell, Windows safe), `safePath()` path traversal block, `abort()` / kill command, full natural language REPL with 15+ commands
+- `cli.js` — all AI calls through `getCoreEngine()`, all `require()` at top, config deserialization hardened, `config repair` command, `server` command for standalone Tiger Chat backend
+- `concept-to-reality.js` — Ctrl+C abort wired to agent, hardened JSON parsing, uses core-engine throughout
+- `provider-registry.js` — `loadProviders()` hardened with try/catch auto-repair, `downloadModel()` redirect bug fixed (follows `Location` header correctly)
+- `mcp-server.js` — all duplicate AI logic removed, delegates entirely to `getCoreEngine()`
 
-### Needs Work
-- `local-agent.js` — `gatherContext()` uses `ls -la` which breaks on Windows, needs `fs.readdir` instead
-- `local-agent.js` — `runCommand()` allowed list is Linux-biased, needs Windows `cmd` equivalents
-- `core-engine.js` — no retry logic on rate limit / 429 errors
-- `provider-registry.js` — `downloadModel()` doesn't follow HTTP redirects properly (HuggingFace uses redirects)
-- `cli.js` — `startDaemon()` references `fsSync` which is never imported (bug)
-- `mcp-server.js` — chat history grows unbounded in memory between requests
-- No streaming support — all responses wait for full completion before returning
+### Remaining
+- `provider-registry.js` — `listProviders()` reads from its own `providers.json` instead of core-engine `config.json` — these two config stores should be unified into one
+- Streaming not yet tested end-to-end with a live provider
+- No integration tests across the full stack
 
 ---
 
-## What Needs Building
+## What Still Needs Building
 
-### 1. Fix Windows Compatibility (`local-agent.js`)
-Replace `ls -la` shell command in `gatherContext()` with a pure Node.js `fs.readdir` call so it works on Windows.
+### 1. Unify Config Stores (`provider-registry.js`)
+`provider-registry.js` maintains its own `~/.tiger-code-pilot/providers.json` separately from `core-engine.js` which uses `config.json`. Refactor `loadProviders()` and `saveProviders()` to read/write from `config.json` via the core-engine `loadConfig()` / `saveConfig()` exports so there is one single source of truth.
 
-### 2. Fix `fsSync` Bug (`cli.js`)
-`startDaemon()` uses `fsSync` but only `fs` is imported at the top. Add `const fsSync = require('fs');`.
+### 2. End-to-End Streaming Test
+Verify `chatStream()` in `core-engine.js` works correctly with OpenAI and Groq. Confirm the SSE chunk parsing handles edge cases (empty chunks, `[DONE]`, malformed JSON lines).
 
-### 3. Add Retry Logic (`core-engine.js`)
-Wrap `callAI()` with exponential backoff for 429 (rate limit) and 503 (service unavailable) responses. Max 3 retries.
-
-### 4. Fix Model Download Redirects (`provider-registry.js`)
-HuggingFace download URLs redirect. The current `downloadModel()` calls itself recursively on redirect but passes the original URL again instead of the redirect location. Fix to follow the `Location` header.
-
-### 5. Add Streaming Support (`core-engine.js`)
-Add an optional `stream: true` path to `callAI()` that uses chunked responses and emits via a callback. The callback is passed directly to the caller — no HTTP involved.
-
-### 6. Provider Health Check (`core-engine.js`)
-Add a `checkProviderHealth()` method that pings each configured provider and caches the result for 60 seconds. Used by CLI `test-connection` and MCP `/health`.
-
-### 7. Improve Agent Context (`local-agent.js`)
-`gatherContext()` only reads 4 files. Improve it to:
-- Walk the directory tree up to 2 levels deep
-- Read `package.json`, `tsconfig.json`, `README.md` fully
-- Detect language from file extensions
-- Return a structured summary instead of a raw string
+### 3. Integration Tests
+Add a `src/test/` suite that:
+- Mocks axios and verifies `core-engine.js` routes correctly per provider
+- Verifies `safePath()` blocks traversal attempts
+- Verifies `condenseSession()` replaces history correctly
+- Verifies `downloadModel()` follows redirects
 
 ---
 
@@ -82,18 +66,27 @@ Do not change these signatures — Qwen's frontend depends on them.
 const { getCoreEngine } = require('./core-engine');
 const engine = getCoreEngine();
 
-engine.chat(userMessage, sessionId)         // → Promise<string>
-engine.analyze(code, language, mode)        // → Promise<string>
-engine.vibecode(action, params)             // → Promise<string>
-engine.switchProvider(providerName)         // → void
-engine.getConfig()                          // → config object
+engine.chat(message, sessionId)                    // → Promise<string>
+engine.chatStream(message, sessionId, onChunk)     // → Promise<void>
+engine.analyze(code, language, mode)               // → Promise<string>
+engine.vibecode(action, params)                    // → Promise<string>
+engine.condenseSession(sessionId)                  // → Promise<string>
+engine.checkHealth(provider)                       // → Promise<boolean>
+engine.switchProvider(name)                        // → void
+engine.setApiKey(provider, key)                    // → void
+engine.setModel(model)                             // → void
+engine.getConfig()                                 // → config object
+engine.repairConfig()                              // → void
+engine.reload()                                    // → CoreEngine
+engine.callAI(messages, options)                   // → Promise<string>
 ```
 
 ### Config File Location
 ```
-~/.tiger-code-pilot/config.json
-~/.tiger-code-pilot/chat-history.json
-~/.tiger-code-pilot/models/
+~/.tiger-code-pilot/config.json        — provider, model, API keys, settings
+~/.tiger-code-pilot/chat-history.json  — all sessions, capped at 200 messages
+~/.tiger-code-pilot/models/            — downloaded GGUF model files
+~/.tiger-code-pilot/agent/task-log.json — agent task progress log
 ```
 
 ---
@@ -117,21 +110,34 @@ engine.getConfig()                          // → config object
 ## Test Commands
 
 ```bash
-# Install deps
 npm install
 
-# Test CLI
+# CLI
 node src/cli.js help
+node src/cli.js config
+node src/cli.js config repair
 node src/cli.js test-connection
 node src/cli.js chat
+node src/cli.js analyze src/core-engine.js --mode general
+node src/cli.js vibecode generate "a fibonacci function" --language javascript
+node src/cli.js server --port 3000
 
-# Test MCP server (stdio mode only)
+# Agent REPL
+node src/local-agent.js
+node src/local-agent.js help
+node src/local-agent.js plan "build a todo app"
+
+# MCP server (stdio)
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | node src/mcp-server.js
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | node src/mcp-server.js
 
-# Test provider registry
+# Provider registry
 node src/provider-registry.js detect
 node src/provider-registry.js providers
+node src/provider-registry.js models
+
+# Concept to reality
+node src/concept-to-reality.js
 ```
 
 ---
@@ -144,4 +150,4 @@ node src/provider-registry.js providers
 }
 ```
 
-No other runtime dependencies needed for the backend. All Node.js built-ins (`fs`, `path`, `http`, `https`, `readline`, `child_process`).
+All other modules are Node.js built-ins: `fs`, `path`, `os`, `http`, `https`, `readline`, `child_process`, `url`, `util`.

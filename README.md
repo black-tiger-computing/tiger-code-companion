@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-0.4.0-dc2626" alt="Version"/>
-  <img src="https://img.shields.io/badge/license-MIT-10b981" alt="License"/>
+  <img src="https://img.shields.io/badge/license-Apache--2.0-10b981" alt="License"/>
   <img src="https://img.shields.io/badge/vscode-1.90+-334155" alt="VS Code"/>
 </p>
 
@@ -213,4 +213,4 @@ This project is being built by two AI agents working in parallel:
 
 ## License
 
-MIT
+Apache 2.0 — free to use, modify, and distribute with patent protection.

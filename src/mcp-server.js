@@ -110,22 +110,13 @@ const MCP_TOOLS = [
 ];
 
 const TOOL_HANDLERS = {
-  analyze_code: async (args) => {
-    const modePrompts = {
-      general: 'Analyze this code for quality, bugs, and improvements:',
-      security: 'Perform a security audit of this code:',
-      performance: 'Analyze this code for performance issues:',
-      bugs: 'Find bugs and issues in this code:'
-    };
-    const prompt = `${modePrompts[args.mode || 'general']}\n\n\`\`\`${args.language || ''}\n${args.code}\n\`\`\``;
-    return await callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
-  },
-  generate_code: async (args) => vibecode('generate', args),
-  explain_code: async (args) => vibecode('explain', args),
-  refactor_code: async (args) => vibecode('refactor', args),
-  debug_code: async (args) => vibecode('debug', { code: args.error_message ? `${args.code}\n\nError: ${args.error_message}` : args.code }),
-  write_tests: async (args) => vibecode('test', args),
-  chat: async (args) => naturalChat(args.message, args.session_id),
+  analyze_code: async (args) => getCoreEngine().analyze(args.code, args.language || 'code', args.mode || 'general'),
+  generate_code: async (args) => getCoreEngine().vibecode('generate', args),
+  explain_code:  async (args) => getCoreEngine().vibecode('explain', args),
+  refactor_code: async (args) => getCoreEngine().vibecode('refactor', args),
+  debug_code:    async (args) => getCoreEngine().vibecode('debug', { code: args.error_message ? `${args.code}\n\nError: ${args.error_message}` : args.code }),
+  write_tests:   async (args) => getCoreEngine().vibecode('test', args),
+  chat:          async (args) => naturalChat(args.message, args.session_id),
   read_file: async (args) => {
     try { return await fs.readFile(args.path, 'utf8'); }
     catch (e) { return `Error: ${e.message}`; }

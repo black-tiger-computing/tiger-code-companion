@@ -6,7 +6,8 @@
     },
     "bin": {
         "tiger-code-pilot": "./src/cli.js",
-        "tiger-code-mcp": "./src/mcp-server.js"
+        "tiger-code-mcp": "./src/mcp-server.js",
+        "tiger-agent": "./src/local-agent.js"
     },
     "devDependencies": {
         "@types/glob": "^8.1.0",
@@ -26,10 +27,12 @@
         "compile": "tsc -p ./",
         "watch": "tsc -p ./ --watch",
         "pretest": "npm run compile",
-        "test": "node ./out/test/runTest.js",
+        "test": "node src/test/backend.test.js",
         "lint": "eslint . --ext .ts,.tsx",
         "server": "node src/mcp-server.js --http",
+        "server": "node src/cli.js server",
         "mcp": "node src/mcp-server.js",
+        "agent": "node src/local-agent.js",
         "cli": "node src/cli.js"
     },
     "categories": [
