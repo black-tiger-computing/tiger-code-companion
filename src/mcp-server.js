@@ -11,102 +11,18 @@
  */
 
 const fs = require('fs').promises;
-const fsSync = require('fs');
 const path = require('path');
-const axios = require('axios');
+const readline = require('readline');
+const { getCoreEngine } = require('./core-engine');
 
 const VERSION = '0.4.0';
-const CONFIG_DIR = path.join(require('os').homedir(), '.tiger-code-pilot');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-const CHAT_HISTORY_FILE = path.join(CONFIG_DIR, 'chat-history.json');
 
-function loadConfig() {
-  if (fsSync.existsSync(CONFIG_FILE)) {
-    return JSON.parse(fsSync.readFileSync(CONFIG_FILE, 'utf8'));
-  }
-  return {
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    endpointUrl: 'https://api.openai.com/v1/chat/completions',
-    apiKeys: {}
-  };
+function naturalChat(userMessage, sessionId = 'default') {
+  return getCoreEngine().chat(userMessage, sessionId);
 }
 
-function getApiKey(config, provider) {
-  return config.apiKeys?.[provider] || process.env[`${provider.toUpperCase()}_API_KEY`];
-}
-
-async function loadChatHistory() {
-  try {
-    if (fsSync.existsSync(CHAT_HISTORY_FILE)) {
-      return JSON.parse(await fs.readFile(CHAT_HISTORY_FILE, 'utf8'));
-    }
-  } catch (e) {}
-  return [];
-}
-
-async function saveChatHistory(history) {
-  try {
-    await fs.writeFile(CHAT_HISTORY_FILE, JSON.stringify(history, null, 2));
-  } catch (e) {}
-}
-
-async function addMessageToHistory(role, content, sessionId = 'default') {
-  const history = await loadChatHistory();
-  history.push({ role, content, sessionId, timestamp: new Date().toISOString() });
-  if (history.length > 100) history.splice(0, history.length - 100);
-  await saveChatHistory(history);
-}
-
-async function callAI(messages, options = {}) {
-  const config = loadConfig();
-  const apiKey = getApiKey(config, config.provider);
-  if (!apiKey) throw new Error(`No API key for ${config.provider}`);
-
-  const response = await axios.post(config.endpointUrl, {
-    model: options.model || config.model,
-    messages,
-    temperature: options.temperature || 0.7,
-    max_tokens: options.maxTokens || 4096
-  }, {
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    timeout: 60000
-  });
-
-  return response.data.choices?.[0]?.message?.content || 'No response received.';
-}
-
-async function naturalChat(userMessage, sessionId = 'default') {
-  const history = await loadChatHistory();
-  const sessionHistory = history.filter(m => m.sessionId === sessionId).slice(-20);
-
-  const messages = [
-    {
-      role: 'system',
-      content: 'You are Tiger Code Pilot, an expert AI coding assistant. Be helpful, provide complete code examples, and explain your reasoning.'
-    },
-    ...sessionHistory.map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: userMessage }
-  ];
-
-  const response = await callAI(messages, { temperature: 0.7 });
-  await addMessageToHistory('user', userMessage, sessionId);
-  await addMessageToHistory('assistant', response, sessionId);
-  return response;
-}
-
-async function vibecode(action, params) {
-  const prompts = {
-    generate: `Generate complete working code with comments.\nDescription: ${params.description}\nLanguage: ${params.language || 'auto'}`,
-    explain: `Explain this code in simple terms:\n${params.code}`,
-    refactor: `Refactor this code to be cleaner:\n${params.code}`,
-    debug: `Find and fix bugs:\n${params.code}`,
-    test: `Write comprehensive unit tests:\n${params.code}`,
-    optimize: `Optimize for performance:\n${params.code}`
-  };
-  const prompt = prompts[action];
-  if (!prompt) throw new Error(`Unknown action: ${action}`);
-  return await callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
+function vibecode(action, params) {
+  return getCoreEngine().vibecode(action, params);
 }
 
 const MCP_TOOLS = [

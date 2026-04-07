@@ -3,86 +3,158 @@
 /**
  * Tiger Code Pilot - Local Agent
  *
- * Autonomous AI agent that can execute tasks without constant user interaction.
- * Takes a goal, breaks it into steps, and executes them autonomously.
+ * Autonomous AI agent. Takes a goal, plans steps, executes them.
+ * Supports abort, task condensing, and a full natural language command set.
  */
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
+const os = require('os');
+const readline = require('readline');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const { getCoreEngine } = require('./core-engine');
 
 const execAsync = promisify(exec);
 
-const AGENT_DIR = path.join(require('os').homedir(), '.tiger-code-pilot', 'agent');
+const AGENT_DIR = path.join(os.homedir(), '.tiger-code-pilot', 'agent');
 const TASK_LOG_FILE = path.join(AGENT_DIR, 'task-log.json');
+
+// Safe commands — Windows + Unix
+const ALLOWED_COMMANDS = new Set([
+  'npm', 'npx', 'node', 'git',
+  'echo', 'jest', 'mocha', 'vitest',
+  // Windows
+  'dir', 'type', 'copy', 'move',
+  // Unix
+  'ls', 'cat', 'cp', 'mv'
+]);
+
+const DANGEROUS_PATTERNS = [
+  /rm\s+-rf/i, /del\s+\/[sf]/i, /sudo/i,
+  /chmod\s+777/i, /format\s+[a-z]:/i,
+  />\s*\/dev\/null/i, /\|\s*sh\b/i, /\|\s*bash\b/i,
+  /eval\s*\(/i, /exec\s*\(/i
+];
+
+// ─── Path safety ──────────────────────────────────────────────────────────────
+
+function safePath(workingDir, target) {
+  // Resolve fully, then verify it stays inside workingDir
+  const resolved = path.resolve(workingDir, target);
+  const base = path.resolve(workingDir);
+  if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+    throw new Error(`Path traversal blocked: "${target}" resolves outside working directory`);
+  }
+  return resolved;
+}
+
+// ─── Context gathering (pure Node.js, Windows safe) ──────────────────────────
+
+async function gatherContext(workingDir, depth = 2) {
+  const lines = [];
+
+  async function walk(dir, currentDepth) {
+    if (currentDepth > depth) return;
+    let entries;
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+    catch (e) { return; }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const indent = '  '.repeat(currentDepth);
+      lines.push(`${indent}${entry.isDirectory() ? '📁' : '📄'} ${entry.name}`);
+      if (entry.isDirectory()) await walk(path.join(dir, entry.name), currentDepth + 1);
+    }
+  }
+
+  await walk(workingDir, 0);
+
+  const summary = [`Directory: ${workingDir}`, 'Structure:', ...lines, ''];
+
+  // Read key files fully
+  const keyFiles = ['package.json', 'tsconfig.json', 'README.md', '.gitignore'];
+  for (const file of keyFiles) {
+    try {
+      const content = await fs.readFile(path.join(workingDir, file), 'utf8');
+      summary.push(`--- ${file} ---`);
+      summary.push(content.substring(0, 1000));
+      summary.push('');
+    } catch (e) { /* file doesn't exist */ }
+  }
+
+  // Detect primary language
+  const exts = lines.map(l => path.extname(l.trim())).filter(Boolean);
+  const extCount = {};
+  for (const e of exts) extCount[e] = (extCount[e] || 0) + 1;
+  const primary = Object.entries(extCount).sort((a, b) => b[1] - a[1])[0];
+  if (primary) summary.push(`Primary language: ${primary[0]}`);
+
+  return summary.join('\n');
+}
+
+// ─── LocalAgent ───────────────────────────────────────────────────────────────
 
 class LocalAgent {
   constructor() {
     this.engine = getCoreEngine();
     this.currentTask = null;
-    this.taskSteps = [];
     this.progress = [];
     this.workingDir = process.cwd();
-    this.allowedDirs = [this.workingDir];
     this.maxSteps = 50;
     this.stepCount = 0;
-    this.onProgress = null; // Callback for progress updates
+    this.onProgress = null;
+    this._aborted = false;
   }
 
-  async ensureAgentDir() {
-    if (!fsSync.existsSync(AGENT_DIR)) {
-      await fs.mkdir(AGENT_DIR, { recursive: true });
-    }
+  // ── Abort ──────────────────────────────────────────────────────────────────
+
+  abort() {
+    this._aborted = true;
+    this._logSync('abort', 'aborted', 'Task aborted by user');
+  }
+
+  _logSync(step, status, details) {
+    this.progress.push({ step, status, details, timestamp: new Date().toISOString() });
+    if (this.onProgress) this.onProgress({ step, status, details });
   }
 
   async logProgress(step, status, details = null) {
-    await this.ensureAgentDir();
-
-    this.progress.push({
-      step,
-      status,
-      details,
-      timestamp: new Date().toISOString()
-    });
-
-    // Save to log file
+    this._logSync(step, status, details);
     try {
+      if (!fsSync.existsSync(AGENT_DIR)) await fs.mkdir(AGENT_DIR, { recursive: true });
       await fs.writeFile(TASK_LOG_FILE, JSON.stringify(this.progress, null, 2));
-    } catch (e) {
-      // Ignore logging errors
-    }
-
-    if (this.onProgress) {
-      this.onProgress({ step, status, details });
-    }
+    } catch (e) { /* ignore log errors */ }
   }
 
+  // ── Task execution ─────────────────────────────────────────────────────────
+
   async executeTask(goal, options = {}) {
+    this._aborted = false;
     this.currentTask = {
       goal,
       startTime: new Date().toISOString(),
       workingDir: options.workingDir || this.workingDir,
       maxSteps: options.maxSteps || this.maxSteps
     };
-
     this.progress = [];
     this.stepCount = 0;
 
     await this.logProgress('init', 'starting', `Goal: ${goal}`);
 
     try {
-      // Step 1: Analyze the goal and create a plan
-      await this.logProgress('planning', 'analyzing goal');
+      await this.logProgress('planning', 'analyzing');
       const plan = await this.createPlan(goal);
-      await this.logProgress('planning', 'complete', `Created ${plan.steps.length} step plan`);
+      await this.logProgress('planning', 'complete', `${plan.steps.length} steps planned`);
 
-      // Step 2: Execute each step
       for (const step of plan.steps) {
+        if (this._aborted) {
+          await this.logProgress('abort', 'stopped', 'Task was aborted');
+          return { success: false, summary: 'Aborted by user', steps: this.stepCount, progress: this.progress };
+        }
         if (this.stepCount >= this.currentTask.maxSteps) {
-          await this.logProgress('error', 'max_steps_reached', `Reached maximum of ${this.currentTask.maxSteps} steps`);
+          await this.logProgress('error', 'max_steps_reached');
           break;
         }
 
@@ -94,20 +166,15 @@ class LocalAgent {
           this.stepCount++;
         } catch (error) {
           await this.logProgress(`step_${this.stepCount + 1}`, 'error', error.message);
-
-          // Try to recover
           const recovery = await this.handleStepError(step, error);
           if (recovery.retry) {
-            await this.logProgress(`step_${this.stepCount + 1}`, 'retrying', recovery.reason);
             try {
               const result = await this.executeStep(step, recovery.context);
-              await this.logProgress(`step_${this.stepCount + 1}`, 'complete_after_retry', result.summary);
+              await this.logProgress(`step_${this.stepCount + 1}`, 'recovered', result.summary);
               this.stepCount++;
             } catch (retryError) {
               await this.logProgress(`step_${this.stepCount + 1}`, 'failed', retryError.message);
-              if (!recovery.continueOnError) {
-                throw new Error(`Step failed after retry: ${step.description}`);
-              }
+              if (!recovery.continueOnError) throw new Error(`Step failed: ${step.description}`);
             }
           } else if (!recovery.continueOnError) {
             throw error;
@@ -115,22 +182,10 @@ class LocalAgent {
         }
       }
 
-      // Step 3: Verify the work
-      await this.logProgress('verification', 'checking results');
       const verification = await this.verifyGoalAchieved(goal);
+      await this.logProgress('complete', verification.achieved ? 'success' : 'partial', verification.summary);
 
-      if (verification.achieved) {
-        await this.logProgress('complete', 'success', verification.summary);
-      } else {
-        await this.logProgress('complete', 'partial', verification.summary);
-      }
-
-      return {
-        success: verification.achieved,
-        summary: verification.summary,
-        steps: this.stepCount,
-        progress: this.progress
-      };
+      return { success: verification.achieved, summary: verification.summary, steps: this.stepCount, progress: this.progress };
     } catch (error) {
       await this.logProgress('error', 'failed', error.message);
       throw error;
@@ -138,316 +193,348 @@ class LocalAgent {
   }
 
   async createPlan(goal) {
-    const context = await this.gatherContext();
-
-    const prompt = `You are planning how to achieve this goal:
+    const context = await gatherContext(this.workingDir);
+    const prompt = `You are planning how to achieve this goal autonomously.
 
 Goal: ${goal}
-
-Current Working Directory: ${this.workingDir}
-${context ? `Context:\n${context}\n` : ''}
-
-Create a step-by-step plan. Each step should be:
-1. Specific and actionable
-2. Independent when possible
-3. Testable/verifiable
-
-Return the plan as a JSON array of steps like:
-[
-  {
-    "action": "read_file" | "write_file" | "modify_file" | "run_command" | "analyze",
-    "description": "What this step does",
-    "target": "File path or description",
-    "details": "Specific instructions",
-    "verify": "How to verify this step succeeded"
-  }
-]
-
-Only include these actions:
-- read_file: Read existing code
-- write_file: Create new files
-- modify_file: Edit existing files
-- run_command: Run safe commands (tests, lint, git)
-- analyze: Think about what's been done
-
-Provide ONLY the JSON array, no other text.`;
-
-    const response = await this.engine.callAI([{ role: 'user', content: prompt }], {
-      temperature: 0.3
-    });
-
-    // Parse the JSON from response
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      throw new Error('Agent failed to create valid plan');
-    }
-
-    const steps = JSON.parse(jsonMatch[0]);
-    return { steps };
-  }
-
-  async gatherContext() {
-    let context = '';
-
-    try {
-      // Get directory structure
-      const { stdout } = await execAsync('ls -la', { cwd: this.workingDir });
-      context += `Directory listing:\n${stdout}\n\n`;
-
-      // Try to read common files for context
-      const commonFiles = ['package.json', 'README.md', 'tsconfig.json', '.gitignore'];
-      for (const file of commonFiles) {
-        try {
-          const content = await fs.readFile(path.join(this.workingDir, file), 'utf8');
-          context += `\n--- ${file} ---\n${content.substring(0, 500)}...\n`;
-        } catch (e) {
-          // File doesn't exist, skip
-        }
-      }
-    } catch (e) {
-      // Ignore context gathering errors
-    }
-
-    return context;
-  }
-
-  async executeStep(step, context = {}) {
-    switch (step.action) {
-      case 'read_file':
-        return await this.readFile(step);
-      case 'write_file':
-        return await this.writeFile(step);
-      case 'modify_file':
-        return await this.modifyFile(step, context);
-      case 'run_command':
-        return await this.runCommand(step);
-      case 'analyze':
-        return await this.analyzeStep(step);
-      default:
-        throw new Error(`Unknown action: ${step.action}`);
-    }
-  }
-
-  async readFile(step) {
-    const filePath = path.join(this.workingDir, step.target);
-
-    // Security check
-    if (!this.isPathAllowed(filePath)) {
-      throw new Error(`Access denied: ${step.target}`);
-    }
-
-    const content = await fs.readFile(filePath, 'utf8');
-    return {
-      summary: `Read ${step.target} (${content.length} chars)`,
-      content
-    };
-  }
-
-  async writeFile(step) {
-    const filePath = path.join(this.workingDir, step.target);
-
-    if (!this.isPathAllowed(filePath)) {
-      throw new Error(`Access denied: ${step.target}`);
-    }
-
-    // Create directory if needed
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-
-    await fs.writeFile(filePath, step.details, 'utf8');
-    return {
-      summary: `Created ${step.target}`
-    };
-  }
-
-  async modifyFile(step, context) {
-    const filePath = path.join(this.workingDir, step.target);
-
-    if (!this.isPathAllowed(filePath)) {
-      throw new Error(`Access denied: ${step.target}`);
-    }
-
-    // Read current content
-    const currentContent = await fs.readFile(filePath, 'utf8');
-
-    // Ask AI to generate modified content
-    const prompt = `Modify this file according to the instructions:
-
-File: ${step.target}
-
-Current Content:
-\`\`\`
-${currentContent.substring(0, 8000)}
-\`\`\`
-
-Instructions:
-${step.details}
-
-Provide the COMPLETE modified file content. Return only the code, no explanations.`;
-
-    const newContent = await this.engine.callAI([{ role: 'user', content: prompt }], {
-      temperature: 0.3
-    });
-
-    // Write the modified content
-    await fs.writeFile(filePath, newContent, 'utf8');
-    return {
-      summary: `Modified ${step.target}`
-    };
-  }
-
-  async runCommand(step) {
-    // Only allow safe commands
-    const allowedCommands = ['npm', 'npx', 'node', 'git', 'ls', 'cat', 'echo', 'test', 'jest', 'mocha'];
-    const command = step.details;
-    const baseCommand = command.split(' ')[0];
-
-    if (!allowedCommands.includes(baseCommand)) {
-      throw new Error(`Command not allowed: ${baseCommand}. Allowed: ${allowedCommands.join(', ')}`);
-    }
-
-    // Block dangerous patterns
-    const dangerousPatterns = [
-      /rm\s+-rf/,
-      /sudo/,
-      /chmod\s+[777]/,
-      />\/dev\/null/,
-      /\|\s*sh/
-    ];
-
-    for (const pattern of dangerousPatterns) {
-      if (pattern.test(command)) {
-        throw new Error(`Dangerous command pattern detected: ${command}`);
-      }
-    }
-
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: this.workingDir,
-        timeout: 120000
-      });
-
-      return {
-        summary: `Ran: ${command}`,
-        output: stdout,
-        errors: stderr
-      };
-    } catch (error) {
-      throw new Error(`Command failed: ${error.message}\n${error.stderr}`);
-    }
-  }
-
-  async analyzeStep(step) {
-    // This is a thinking step - AI analyzes what's been done
-    const context = await this.gatherContext();
-
-    const prompt = `Analyze the current state and what's been accomplished:
-
-Goal: ${this.currentTask.goal}
-Current Step: ${step.description}
+Working Directory: ${this.workingDir}
 
 Context:
 ${context}
 
-Provide a summary of:
-1. What's been completed so far
-2. What still needs to be done
-3. Any issues or concerns
-4. Recommendations for next steps`;
+Return ONLY a JSON array of steps:
+[
+  {
+    "action": "read_file" | "write_file" | "modify_file" | "run_command" | "analyze",
+    "description": "What this step does",
+    "target": "relative file path or empty string",
+    "details": "Exact content or command",
+    "verify": "How to verify success"
+  }
+]`;
 
-    const analysis = await this.engine.callAI([{ role: 'user', content: prompt }], {
-      temperature: 0.5
-    });
+    const response = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
+    const match = response.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Agent could not create a valid plan');
+    return { steps: JSON.parse(match[0]) };
+  }
 
-    return {
-      summary: 'Analysis complete',
-      analysis
-    };
+  async executeStep(step, context = {}) {
+    switch (step.action) {
+      case 'read_file':    return await this.readFile(step);
+      case 'write_file':   return await this.writeFile(step);
+      case 'modify_file':  return await this.modifyFile(step);
+      case 'run_command':  return await this.runCommand(step);
+      case 'analyze':      return await this.analyzeStep(step);
+      default: throw new Error(`Unknown action: ${step.action}`);
+    }
+  }
+
+  async readFile(step) {
+    const filePath = safePath(this.workingDir, step.target);
+    const content = await fs.readFile(filePath, 'utf8');
+    return { summary: `Read ${step.target} (${content.length} chars)`, content };
+  }
+
+  async writeFile(step) {
+    const filePath = safePath(this.workingDir, step.target);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, step.details, 'utf8');
+    return { summary: `Created ${step.target}` };
+  }
+
+  async modifyFile(step) {
+    const filePath = safePath(this.workingDir, step.target);
+    const current = await fs.readFile(filePath, 'utf8');
+    const prompt = `Modify this file:\n\nFile: ${step.target}\n\nCurrent:\n\`\`\`\n${current.substring(0, 8000)}\n\`\`\`\n\nInstructions: ${step.details}\n\nReturn ONLY the complete modified file content.`;
+    const newContent = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
+    await fs.writeFile(filePath, newContent, 'utf8');
+    return { summary: `Modified ${step.target}` };
+  }
+
+  async runCommand(step) {
+    const command = step.details.trim();
+    const base = command.split(/\s+/)[0].toLowerCase();
+
+    if (!ALLOWED_COMMANDS.has(base)) {
+      throw new Error(`Command not allowed: "${base}". Allowed: ${[...ALLOWED_COMMANDS].join(', ')}`);
+    }
+    for (const pattern of DANGEROUS_PATTERNS) {
+      if (pattern.test(command)) throw new Error(`Dangerous pattern blocked: ${command}`);
+    }
+
+    const { stdout, stderr } = await execAsync(command, { cwd: this.workingDir, timeout: 120000 });
+    return { summary: `Ran: ${command}`, output: stdout, errors: stderr };
+  }
+
+  async analyzeStep(step) {
+    const context = await gatherContext(this.workingDir, 1);
+    const prompt = `Analyze progress toward the goal.\n\nGoal: ${this.currentTask.goal}\nStep: ${step.description}\n\nContext:\n${context}\n\nSummarise: what's done, what's left, any concerns.`;
+    const analysis = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.5 });
+    return { summary: 'Analysis complete', analysis };
   }
 
   async handleStepError(step, error) {
-    const prompt = `A step failed while executing a task.
-
-Goal: ${this.currentTask.goal}
-Failed Step: ${step.description}
-Action: ${step.action}
-Error: ${error.message}
-
-Should we:
-1. Retry with modifications?
-2. Skip this step and continue?
-3. Abort the entire task?
-
-Respond with JSON:
-{
-  "retry": true/false,
-  "continueOnError": true/false,
-  "reason": "Why this choice",
-  "context": "Any modifications for retry"
-}`;
-
-    const response = await this.engine.callAI([{ role: 'user', content: prompt }], {
-      temperature: 0.3
-    });
-
+    const prompt = `A step failed.\n\nGoal: ${this.currentTask.goal}\nStep: ${step.description}\nError: ${error.message}\n\nRespond with JSON only:\n{"retry": true/false, "continueOnError": true/false, "reason": "...", "context": "..."}`;
+    const response = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
     try {
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-    } catch (e) {}
-
-    // Default: don't retry
+      const match = response.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+    } catch (e) { /* fall through */ }
     return { retry: false, continueOnError: false };
   }
 
   async verifyGoalAchieved(goal) {
-    const context = await this.gatherContext();
-
-    const prompt = `Verify if the goal has been achieved.
-
-Goal: ${goal}
-
-Current State:
-${context}
-
-Respond with JSON:
-{
-  "achieved": true/false,
-  "summary": "Brief summary of what was accomplished",
-  "missing": "What's still missing (if anything)"
-}`;
-
-    const response = await this.engine.callAI([{ role: 'user', content: prompt }], {
-      temperature: 0.3
-    });
-
+    const context = await gatherContext(this.workingDir, 1);
+    const prompt = `Verify if the goal was achieved.\n\nGoal: ${goal}\n\nCurrent state:\n${context}\n\nRespond with JSON only:\n{"achieved": true/false, "summary": "...", "missing": "..."}`;
+    const response = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
     try {
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-    } catch (e) {}
-
-    return {
-      achieved: false,
-      summary: 'Verification failed to parse',
-      missing: 'Unknown'
-    };
+      const match = response.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+    } catch (e) { /* fall through */ }
+    return { achieved: false, summary: 'Verification failed', missing: 'Unknown' };
   }
 
-  isPathAllowed(filePath) {
-    const normalized = path.normalize(filePath);
+  // ── Agent commands ─────────────────────────────────────────────────────────
 
-    // Check if path is within allowed directories
-    for (const allowedDir of this.allowedDirs) {
-      if (normalized.startsWith(allowedDir)) {
-        return true;
-      }
-    }
+  async showStatus() {
+    if (!this.currentTask) return 'No task running.';
+    return [
+      `Task: ${this.currentTask.goal}`,
+      `Steps: ${this.stepCount}/${this.currentTask.maxSteps}`,
+      `Status: ${this._aborted ? 'aborted' : 'running'}`,
+      `Progress entries: ${this.progress.length}`
+    ].join('\n');
+  }
 
-    return false;
+  async showLog() {
+    try {
+      const log = await fs.readFile(TASK_LOG_FILE, 'utf8');
+      return log;
+    } catch (e) { return 'No task log found.'; }
+  }
+
+  async clearLog() {
+    try { await fs.writeFile(TASK_LOG_FILE, '[]'); return 'Log cleared.'; }
+    catch (e) { return `Could not clear log: ${e.message}`; }
   }
 }
 
-// Export
-module.exports = { LocalAgent };
+// ─── Natural language CLI ─────────────────────────────────────────────────────
+
+const COMMANDS = {
+  'run':          { desc: 'Run a task — e.g. "run create a REST API in Express"' },
+  'stop':         { desc: 'Stop / abort the current running task' },
+  'kill':         { desc: 'Alias for stop' },
+  'status':       { desc: 'Show current task status and step count' },
+  'log':          { desc: 'Show the full task progress log' },
+  'clear log':    { desc: 'Clear the task log file' },
+  'condense':     { desc: 'Summarise and compress the current chat session to save context' },
+  'chunk':        { desc: 'Alias for condense' },
+  'context':      { desc: 'Show the current working directory context (file tree + key files)' },
+  'plan':         { desc: 'Show what the agent would plan for a goal without executing — e.g. "plan build a todo app"' },
+  'explain':      { desc: 'Ask the agent to explain a file — e.g. "explain src/app.js"' },
+  'fix':          { desc: 'Ask the agent to fix a file — e.g. "fix src/app.js"' },
+  'refactor':     { desc: 'Ask the agent to refactor a file — e.g. "refactor src/app.js"' },
+  'test':         { desc: 'Ask the agent to write tests for a file — e.g. "test src/app.js"' },
+  'review':       { desc: 'Ask the agent to review a file — e.g. "review src/app.js"' },
+  'generate':     { desc: 'Generate code from a description — e.g. "generate a login form in React"' },
+  'ask':          { desc: 'Ask the agent a question — e.g. "ask how do I connect to MongoDB"' },
+  'chat':         { desc: 'Start interactive chat with the agent' },
+  'help':         { desc: 'Show this command list' },
+  'exit':         { desc: 'Exit the agent CLI' }
+};
+
+function showHelp() {
+  console.log('\n🐯 Tiger Agent — Natural Language Commands\n' + '━'.repeat(50));
+  for (const [cmd, info] of Object.entries(COMMANDS)) {
+    console.log(`  ${cmd.padEnd(14)} ${info.desc}`);
+  }
+  console.log('');
+}
+
+async function handleCommand(input, agent, rl) {
+  const trimmed = input.trim();
+  const lower = trimmed.toLowerCase();
+  const engine = getCoreEngine();
+
+  if (!trimmed) return;
+
+  // stop / kill
+  if (lower === 'stop' || lower === 'kill') {
+    agent.abort();
+    console.log('🛑 Task aborted.');
+    return;
+  }
+
+  // status
+  if (lower === 'status') {
+    console.log(await agent.showStatus());
+    return;
+  }
+
+  // log
+  if (lower === 'log') {
+    console.log(await agent.showLog());
+    return;
+  }
+
+  // clear log
+  if (lower === 'clear log') {
+    console.log(await agent.clearLog());
+    return;
+  }
+
+  // condense / chunk
+  if (lower === 'condense' || lower === 'chunk') {
+    console.log('⏳ Condensing session...');
+    const summary = await engine.condenseSession();
+    console.log('✅ Session condensed:\n' + summary);
+    return;
+  }
+
+  // context
+  if (lower === 'context') {
+    console.log(await gatherContext(process.cwd()));
+    return;
+  }
+
+  // help
+  if (lower === 'help') {
+    showHelp();
+    return;
+  }
+
+  // exit
+  if (lower === 'exit' || lower === 'quit') {
+    console.log('👋 Goodbye!');
+    rl.close();
+    process.exit(0);
+  }
+
+  // plan <goal>
+  if (lower.startsWith('plan ')) {
+    const goal = trimmed.slice(5);
+    console.log('🗺️  Planning (no execution)...');
+    try {
+      const plan = await agent.createPlan(goal);
+      plan.steps.forEach((s, i) => console.log(`  ${i + 1}. [${s.action}] ${s.description}`));
+    } catch (e) { console.error(`❌ ${e.message}`); }
+    return;
+  }
+
+  // run <goal>
+  if (lower.startsWith('run ')) {
+    const goal = trimmed.slice(4);
+    console.log(`🚀 Running: ${goal}\n`);
+    agent.onProgress = ({ step, status, details }) => {
+      const icon = status === 'complete' || status === 'recovered' ? '✅' : status === 'error' || status === 'failed' ? '❌' : status === 'aborted' ? '🛑' : '⏳';
+      console.log(`${icon} [${step}] ${status}${details ? ' — ' + details : ''}`);
+    };
+    try {
+      const result = await agent.executeTask(goal);
+      console.log(`\n${result.success ? '🎉 Done!' : '⚠️  Partial'} — ${result.summary} (${result.steps} steps)`);
+    } catch (e) { console.error(`❌ Task failed: ${e.message}`); }
+    return;
+  }
+
+  // explain / fix / refactor / test / review <file>
+  const fileActions = ['explain', 'fix', 'refactor', 'test', 'review'];
+  for (const action of fileActions) {
+    if (lower.startsWith(action + ' ')) {
+      const target = trimmed.slice(action.length + 1);
+      try {
+        const filePath = safePath(process.cwd(), target);
+        const code = fsSync.readFileSync(filePath, 'utf8');
+        const ext = path.extname(target).slice(1) || 'code';
+        console.log(`⏳ ${action.charAt(0).toUpperCase() + action.slice(1)}ing ${target}...`);
+        const actionMap = { explain: 'explain', fix: 'debug', refactor: 'refactor', test: 'test', review: 'analyze' };
+        let result;
+        if (action === 'review') {
+          result = await engine.analyze(code, ext, 'general');
+        } else {
+          result = await engine.vibecode(actionMap[action], { code, language: ext });
+        }
+        console.log('\n' + result);
+      } catch (e) { console.error(`❌ ${e.message}`); }
+      return;
+    }
+  }
+
+  // generate <description>
+  if (lower.startsWith('generate ')) {
+    const description = trimmed.slice(9);
+    console.log('⏳ Generating...');
+    try {
+      const result = await engine.vibecode('generate', { description });
+      console.log('\n' + result);
+    } catch (e) { console.error(`❌ ${e.message}`); }
+    return;
+  }
+
+  // ask <question> or chat — just send to engine.chat
+  if (lower.startsWith('ask ') || lower === 'chat') {
+    const message = lower.startsWith('ask ') ? trimmed.slice(4) : null;
+    if (message) {
+      console.log('⏳ Thinking...');
+      try { console.log('\n' + await engine.chat(message)); }
+      catch (e) { console.error(`❌ ${e.message}`); }
+      return;
+    }
+    // interactive chat mode
+    console.log('💬 Chat mode — type "exit" to return to agent\n');
+    const chatLoop = () => {
+      rl.question('You: ', async (msg) => {
+        if (msg.toLowerCase() === 'exit') { console.log('↩️  Back to agent\n'); return; }
+        try { console.log('\n🐯 ' + await engine.chat(msg) + '\n'); }
+        catch (e) { console.error(`❌ ${e.message}\n`); }
+        chatLoop();
+      });
+    };
+    chatLoop();
+    return;
+  }
+
+  // Anything else — treat as a natural language task
+  console.log(`🤔 Treating as task: "${trimmed}"\n`);
+  agent.onProgress = ({ step, status, details }) => {
+    const icon = status.includes('complete') || status === 'recovered' ? '✅' : status === 'error' || status === 'failed' ? '❌' : '⏳';
+    console.log(`${icon} [${step}] ${status}${details ? ' — ' + details : ''}`);
+  };
+  try {
+    const result = await agent.executeTask(trimmed);
+    console.log(`\n${result.success ? '🎉 Done!' : '⚠️  Partial'} — ${result.summary}`);
+  } catch (e) { console.error(`❌ ${e.message}`); }
+}
+
+async function main() {
+  const agent = new LocalAgent();
+  const args = process.argv.slice(2);
+
+  // Single command mode: tiger-agent run "build a todo app"
+  if (args.length > 0) {
+    const input = args.join(' ');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    await handleCommand(input, agent, rl);
+    rl.close();
+    return;
+  }
+
+  // Interactive REPL
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  console.log('🐯 Tiger Agent — type "help" for commands\n');
+
+  const loop = () => {
+    rl.question('agent> ', async (input) => {
+      await handleCommand(input, agent, rl);
+      loop();
+    });
+  };
+  loop();
+}
+
+module.exports = { LocalAgent, gatherContext, safePath };
+
+if (require.main === module) {
+  main().catch(e => { console.error(`❌ ${e.message}`); process.exit(1); });
+}
