@@ -1,0 +1,98 @@
+﻿{
+    "icon": "images/icon.png",
+    "galleryBanner": {
+        "color": "#1e1e1e",
+        "theme": "dark"
+    },
+    "bin": {
+        "tiger-code-pilot": "./src/cli.js",
+        "tiger-code-mcp": "./src/mcp-server.js"
+    },
+    "devDependencies": {
+        "@types/glob": "^8.1.0",
+        "@types/mocha": "^10.0.1",
+        "@types/node": "^20.11.0",
+        "@typescript-eslint/eslint-plugin": "^6.9.0",
+        "@typescript-eslint/parser": "^6.9.0",
+        "eslint": "^8.57.0",
+        "glob": "^10.3.0",
+        "mocha": "^10.2.0",
+        "typescript": "^5.5.6",
+        "@vscode/test-electron": "^2.4.0",
+        "@types/vscode": "^1.90.0"
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -p ./ --watch",
+        "pretest": "npm run compile",
+        "test": "node ./out/test/runTest.js",
+        "lint": "eslint . --ext .ts,.tsx",
+        "server": "node src/mcp-server.js --http",
+        "mcp": "node src/mcp-server.js",
+        "cli": "node src/cli.js"
+    },
+    "categories": [
+        "AI",
+        "Other"
+    ],
+    "displayName": "Tiger Code Pilot",
+    "version": "0.4.0",
+    "contributes": {
+        "commands": [
+            {
+                "title": "Tiger Code Pilot: Analyze Code",
+                "command": "codePilot.start",
+                "category": "Tiger Code Pilot"
+            },
+            {
+                "title": "Tiger Code Pilot: Open Chat",
+                "command": "codePilot.openChat",
+                "category": "Tiger Code Pilot"
+            },
+            {
+                "title": "Tiger Code Pilot: Quick Start / Onboarding",
+                "command": "codePilot.onboarding",
+                "category": "Tiger Code Pilot"
+            },
+            {
+                "title": "Tiger Code Pilot: Test Connection",
+                "command": "codePilot.testConnection",
+                "category": "Tiger Code Pilot"
+            }
+        ]
+    },
+    "name": "tiger-code-pilot",
+    "homepage": "https://github.com/yourname/tiger-code-pilot",
+    "main": "./dist/extension.js",
+    "activationEvents": [
+        "onCommand:codePilot.start",
+        "onCommand:codePilot.openChat"
+    ],
+    "publisher": "your-name",
+    "description": "AI-powered coding assistant with MCP server, CLI, vibecoding, and natural language chat.",
+    "bugs": {
+        "url": "https://github.com/yourname/tiger-code-pilot/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/yourname/tiger-code-pilot.git"
+    },
+    "engines": {
+        "vscode": "^1.90.0"
+    },
+    "keywords": [
+        "ai",
+        "copilot",
+        "tiger",
+        "code",
+        "vscode",
+        "mcp",
+        "vibecoding",
+        "cli"
+    ],
+    "dependencies": {
+        "openai": "^4.29.0",
+        "axios": "^1.6.0"
+    }
+}

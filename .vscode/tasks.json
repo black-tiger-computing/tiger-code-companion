@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm: compile",
+      "type": "shell",
+      "command": "npm run compile",
+      "problemMatcher": ["$tsc"],
+      "group": "build"
+    },
+    {
+      "label": "npm: test",
+      "type": "shell",
+      "command": "npm test",
+      "problemMatcher": ["$mocha"],
+      "group": "test"
+    }
+  ]
+}

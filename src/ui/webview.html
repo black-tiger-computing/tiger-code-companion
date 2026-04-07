@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiger Code Pilot</title>
+  <style>
+    /* Base Reset & Variables */
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --secondary: #10b981;
+      --accent: #f59e0b;
+      --danger: #ef4444;
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border: #334155;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+      --radius: 8px;
+      --radius-lg: 12px;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .header-logo {
+      width: 36px;
+      height: 36px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      font-weight: bold;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(220, 38, 38, 0.4);
+      position: relative;
+    }
+
+    .logo-orbit {
+      position: absolute;
+      border: 1.5px solid rgba(220, 38, 38, 0.3);
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      top: -6px;
+      left: -6px;
+      animation: rotate 15s linear infinite;
+    }
+
+    .logo-orbit-dot {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: #c0c0c0;
+      border-radius: 50%;
+      top: -3px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .header-title h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #dc2626 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--secondary);
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Main Container */
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 64px);
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      padding: 1rem 1.5rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .action-btn .action-icon {
+      font-family: 'Courier New', monospace;
+      font-size: 0.875rem;
+      font-weight: bold;
+      color: var(--text-muted);
+      transition: var(--transition);
+    }
+
+    .action-btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    .action-btn:hover .action-icon {
+      color: white;
+    }
+
+    .action-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Chat Area */
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .message {
+      max-width: 90%;
+      padding: 1rem;
+      border-radius: var(--radius-lg);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-user {
+      background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-assistant {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-header {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .message-content {
+      font-size: 0.9375rem;
+      line-height: 1.7;
+    }
+
+    /* Code Blocks */
+    .code-block {
+      background: #1e1e1e;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 0.75rem 0;
+      overflow: hidden;
+    }
+
+    .code-header {
+      background: #2d2d2d;
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .code-copy-btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .code-content {
+      padding: 1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      color: #d4d4d4;
+    }
+
+    /* Progress Indicators */
+    .progress-container {
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin: 0.5rem 0;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .progress-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .progress-percentage {
+      font-size: 0.875rem;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary) 0%, #a855f7 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    .progress-steps {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+    }
+
+    .step-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.625rem;
+    }
+
+    .step-complete {
+      background: var(--secondary);
+    }
+
+    .step-active {
+      background: var(--primary);
+      animation: pulse 1.5s infinite;
+    }
+
+    .step-pending {
+      background: var(--text-muted);
+    }
+
+    /* Input Area */
+    .input-area {
+      padding: 1rem 1.5rem;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-container {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .input-field {
+      flex: 1;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      color: var(--text-primary);
+      font-size: 0.9375rem;
+      resize: none;
+      min-height: 48px;
+      max-height: 150px;
+      transition: var(--transition);
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .input-field::placeholder {
+      color: var(--text-muted);
+    }
+
+    .send-btn {
+      background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+      border: none;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .send-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .send-btn:active {
+      transform: translateY(0);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Status Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      gap: 0.375rem;
+    }
+
+    .badge-success {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--secondary);
+    }
+
+    .badge-warning {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--accent);
+    }
+
+    .badge-error {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .badge-info {
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--primary);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--border);
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+
+    .empty-state-logo-circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      font-size: 36px;
+      font-weight: bold;
+      color: #ffffff;
+      box-shadow: 0 0 40px rgba(220, 38, 38, 0.4);
+      position: relative;
+    }
+
+    .empty-state-logo-orbit {
+      position: absolute;
+      border: 2px solid rgba(220, 38, 38, 0.2);
+      border-radius: 50%;
+      width: 110px;
+      height: 110px;
+      top: -15px;
+      left: -15px;
+      animation: rotate 20s linear infinite;
+    }
+
+    .empty-state-logo-orbit-dot {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #c0c0c0;
+      border-radius: 50%;
+      top: -5px;
+      left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 8px #c0c0c0;
+    }
+
+    .empty-state-logo-orbit-dot-2 {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #dc2626;
+      border-radius: 50%;
+      bottom: -5px;
+      left: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 8px #dc2626;
+    }
+
+    .empty-state h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state p {
+      font-size: 0.875rem;
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title">
+      <div class="header-logo">
+        <div class="logo-circle">
+          &lt;/&gt;
+          <div class="logo-orbit">
+            <div class="logo-orbit-dot"></div>
+          </div>
+        </div>
+      </div>
+      <h1>Tiger Code Pilot</h1>
+    </div>
+    <div class="header-status">
+      <span class="status-dot"></span>
+      <span id="provider-status">OpenAI</span>
+      <span class="badge badge-success">Connected</span>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <button class="action-btn" onclick="quickAction('analyze')">
+        <span class="action-icon">&lt;?&gt;</span> Analyze Code
+      </button>
+      <button class="action-btn" onclick="quickAction('explain')">
+        <span class="action-icon">{ }</span> Explain
+      </button>
+      <button class="action-btn" onclick="quickAction('refactor')">
+        <span class="action-icon">&lt;/&gt;</span> Refactor
+      </button>
+      <button class="action-btn" onclick="quickAction('test')">
+        <span class="action-icon">[ ]</span> Write Tests
+      </button>
+      <button class="action-btn" onclick="quickAction('debug')">
+        <span class="action-icon">&lt;!&gt;</span> Debug
+      </button>
+      <button class="action-btn" onclick="quickAction('optimize')">
+        <span class="action-icon">^ ^</span> Optimize
+      </button>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area" id="chat-area">
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <div class="empty-state-logo-circle">
+            &lt;/&gt;
+            <div class="empty-state-logo-orbit">
+              <div class="empty-state-logo-orbit-dot"></div>
+              <div class="empty-state-logo-orbit-dot-2"></div>
+            </div>
+          </div>
+        </div>
+        <h3>Welcome to Tiger Code Pilot</h3>
+        <p>Ask me anything about your code, or use the quick actions above to get started!</p>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+      <div class="input-container">
+        <textarea
+          class="input-field"
+          id="input-field"
+          placeholder="Ask me about your code..."
+          rows="1"
+        ></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+          <span>Send</span>
+          <span>➤</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    const chatArea = document.getElementById('chat-area');
+    const inputField = document.getElementById('input-field');
+    const sendBtn = document.getElementById('send-btn');
+    const providerStatus = document.getElementById('provider-status');
+
+    // Auto-resize textarea
+    inputField.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    });
+
+    // Send on Enter (Shift+Enter for new line)
+    inputField.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    function sendMessage() {
+      const message = inputField.value.trim();
+      if (!message) return;
+
+      // Clear empty state
+      if (chatArea.querySelector('.empty-state')) {
+        chatArea.innerHTML = '';
+      }
+
+      // Add user message
+      addMessage('user', message);
+      inputField.value = '';
+      inputField.style.height = 'auto';
+
+      // Disable input while loading
+      setLoading(true);
+
+      // Send to extension
+      vscode.postMessage({ type: 'chat', payload: { message } });
+    }
+
+    function addMessage(role, content) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message message-${role}`;
+
+      const headerDiv = document.createElement('div');
+      headerDiv.className = 'message-header';
+      headerDiv.textContent = role === 'user' ? 'You' : 'Tiger Code Pilot';
+
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'message-content';
+
+      // Parse code blocks
+      const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = codeBlockRegex.exec(content)) !== null) {
+        // Add text before code block
+        if (match.index > lastIndex) {
+          const textContent = content.substring(lastIndex, match.index);
+          contentDiv.innerHTML += textContent.replace(/\n/g, '<br>');
+        }
+
+        // Add code block
+        const lang = match[1] || 'code';
+        const code = match[2];
+        contentDiv.innerHTML += createCodeBlock(lang, code);
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      // Add remaining text
+      if (lastIndex < content.length) {
+        contentDiv.innerHTML += content.substring(lastIndex).replace(/\n/g, '<br>');
+      }
+
+      // If no code blocks found, just add text
+      if (!codeBlockRegex.test(content)) {
+        contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+      }
+
+      messageDiv.appendChild(headerDiv);
+      messageDiv.appendChild(contentDiv);
+      chatArea.appendChild(messageDiv);
+
+      // Scroll to bottom
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function createCodeBlock(lang, code) {
+      const id = 'code-' + Math.random().toString(36).substr(2, 9);
+      return `
+        <div class="code-block">
+          <div class="code-header">
+            <span>${lang}</span>
+            <button class="code-copy-btn" onclick="copyCode('${id}')">📋 Copy</button>
+          </div>
+          <pre class="code-content" id="${id}">${escapeHtml(code)}</pre>
+        </div>
+      `;
+    }
+
+    function copyCode(id) {
+      const code = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        // Show success feedback
+        const btn = document.querySelector(`button[onclick="copyCode('${id}')"]`);
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function setLoading(isLoading) {
+      sendBtn.disabled = isLoading;
+      inputField.disabled = isLoading;
+      if (isLoading) {
+        sendBtn.innerHTML = '<div class="spinner"></div><span>Thinking...</span>';
+      } else {
+        sendBtn.innerHTML = '<span>Send</span><span>➤</span>';
+      }
+    }
+
+    function quickAction(action) {
+      const actions = {
+        analyze: '[GA] Analyze the selected code for quality, bugs, and improvements',
+        explain: '{ } Explain what the selected code does in simple terms',
+        refactor: '</> Refactor the selected code to be cleaner and more maintainable',
+        test: '[ ] Write comprehensive unit tests for the selected code',
+        debug: '<!> Find and fix bugs in the selected code',
+        optimize: '^^ Optimize the selected code for better performance'
+      };
+
+      inputField.value = actions[action];
+      inputField.focus();
+    }
+
+    // Listen for messages from extension
+    window.addEventListener('message', event => {
+      const message = event.data;
+
+      if (message.type === 'response') {
+        setLoading(false);
+        addMessage('assistant', message.payload);
+      } else if (message.type === 'error') {
+        setLoading(false);
+        addMessage('assistant', `❌ Error: ${message.payload}`);
+      } else if (message.type === 'progress') {
+        // Show progress indicator
+        showProgress(message.payload);
+      }
+    });
+
+    function showProgress(progress) {
+      // Implementation for progress tracking
+      console.log('Progress:', progress);
+    }
+  </script>
+</body>
+</html>
