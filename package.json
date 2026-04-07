@@ -1,4 +1,4 @@
-﻿{
+{
     "icon": "images/icon.png",
     "galleryBanner": {
         "color": "#1e1e1e",
@@ -12,14 +12,14 @@
         "@types/glob": "^8.1.0",
         "@types/mocha": "^10.0.1",
         "@types/node": "^20.11.0",
+        "@types/vscode": "^1.90.0",
         "@typescript-eslint/eslint-plugin": "^6.9.0",
         "@typescript-eslint/parser": "^6.9.0",
+        "@vscode/test-electron": "^2.4.0",
         "eslint": "^8.57.0",
         "glob": "^10.3.0",
         "mocha": "^10.2.0",
-        "typescript": "^5.5.6",
-        "@vscode/test-electron": "^2.4.0",
-        "@types/vscode": "^1.90.0"
+        "typescript": "^5.5.6"
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
@@ -59,6 +59,11 @@
                 "title": "Tiger Code Pilot: Test Connection",
                 "command": "codePilot.testConnection",
                 "category": "Tiger Code Pilot"
+            },
+            {
+                "title": "Tiger Code Pilot: Agent Progress",
+                "command": "codePilot.agentProgress",
+                "category": "Tiger Code Pilot"
             }
         ]
     },
@@ -92,7 +97,8 @@
         "cli"
     ],
     "dependencies": {
+        "axios": "^1.6.0",
         "openai": "^4.29.0",
-        "axios": "^1.6.0"
+        "sharp": "^0.34.5"
     }
 }

@@ -3,42 +3,42 @@
 module.exports = {
   name: 'Tiger Code Pilot Theme',
   version: '1.0.0',
-  
+
   // Color Palette
   colors: {
-    // Primary Colors
-    primary: '#6366f1',
-    primaryHover: '#4f46e5',
-    primaryLight: '#818cf8',
-    
+    // Primary Colors — Brand Red
+    primary: '#dc2626',
+    primaryHover: '#b91c1c',
+    primaryLight: '#f87171',
+
     // Secondary Colors
     secondary: '#10b981',
     secondaryHover: '#059669',
-    
+
     // Accent Colors
     accent: '#f59e0b',
     danger: '#ef4444',
     warning: '#f59e0b',
     success: '#10b981',
     info: '#3b82f6',
-    
+
     // Background Colors
     bgPrimary: '#0f172a',
     bgSecondary: '#1e293b',
     bgTertiary: '#334155',
     bgHover: '#475569',
-    
+
     // Text Colors
     textPrimary: '#f8fafc',
     textSecondary: '#94a3b8',
     textMuted: '#64748b',
     textDisabled: '#475569',
-    
+
     // Border Colors
     border: '#334155',
     borderLight: '#475569',
-    borderFocus: '#6366f1',
-    
+    borderFocus: '#dc2626',
+
     // Code Highlighting (vs-dark inspired)
     code: {
       background: '#1e1e1e',
@@ -52,14 +52,14 @@ module.exports = {
       variable: '#9cdcfe',
       operator: '#d4d4d4'
     },
-    
+
     // Gradients
     gradients: {
-      primary: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+      primary: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
       success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
       header: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)'
     },
-    
+
     // Shadows
     shadows: {
       sm: '0 1px 2px 0 rgba(0, 0, 0, 0.2)',
@@ -68,12 +68,12 @@ module.exports = {
       xl: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
     }
   },
-  
+
   // Typography
   typography: {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     codeFontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
-    
+
     fontSize: {
       xs: '0.75rem',
       sm: '0.8125rem',
@@ -83,21 +83,21 @@ module.exports = {
       '2xl': '1.25rem',
       '3xl': '1.5rem'
     },
-    
+
     fontWeight: {
       normal: 400,
       medium: 500,
       semibold: 600,
       bold: 700
     },
-    
+
     lineHeight: {
       tight: 1.25,
       normal: 1.5,
       relaxed: 1.75
     }
   },
-  
+
   // Spacing
   spacing: {
     xs: '0.25rem',
@@ -108,7 +108,7 @@ module.exports = {
     xl: '1.5rem',
     '2xl': '2rem'
   },
-  
+
   // Border Radius
   borderRadius: {
     sm: '4px',
@@ -118,14 +118,14 @@ module.exports = {
     xl: '16px',
     full: '9999px'
   },
-  
+
   // Transitions
   transitions: {
     fast: 'all 0.15s ease',
     base: 'all 0.2s ease',
     slow: 'all 0.3s ease'
   },
-  
+
   // Animations
   animations: {
     pulse: `

@@ -7,8 +7,9 @@
   <style>
     /* Base Reset & Variables */
     :root {
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
+      --primary: #dc2626;
+      --primary-hover: #b91c1c;
+      --primary-light: #f87171;
       --secondary: #10b981;
       --accent: #f59e0b;
       --danger: #ef4444;
@@ -112,7 +113,7 @@
     .header-title h1 {
       font-size: 1.25rem;
       font-weight: 700;
-      background: linear-gradient(135deg, #dc2626 0%, #a855f7 100%);
+      background: linear-gradient(135deg, #dc2626 0%, #f87171 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -180,8 +181,8 @@
     }
 
     .action-btn:hover {
-      background: var(--primary);
-      border-color: var(--primary);
+      background: #dc2626;
+      border-color: #dc2626;
       color: white;
       transform: translateY(-1px);
       box-shadow: var(--shadow);
@@ -224,7 +225,7 @@
     }
 
     .message-user {
-      background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
       align-self: flex-end;
       border-bottom-right-radius: 4px;
     }
@@ -332,7 +333,7 @@
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--primary) 0%, #a855f7 100%);
+      background: linear-gradient(90deg, #dc2626 0%, #f87171 100%);
       border-radius: 4px;
       transition: width 0.3s ease;
       animation: shimmer 2s infinite;
@@ -410,7 +411,7 @@
     .input-field:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
     }
 
     .input-field::placeholder {
@@ -418,7 +419,7 @@
     }
 
     .send-btn {
-      background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
       border: none;
       color: white;
       padding: 0.75rem 1.5rem;
@@ -474,7 +475,7 @@
     }
 
     .badge-info {
-      background: rgba(99, 102, 241, 0.2);
+      background: rgba(220, 38, 38, 0.2);
       color: var(--primary);
     }
 
@@ -813,21 +814,27 @@
 
       inputField.value = actions[action];
       inputField.focus();
+
+      // Auto-load selected editor code
+      vscode.postMessage({ type: 'loadFromEditor' });
     }
 
     // Listen for messages from extension
     window.addEventListener('message', event => {
       const message = event.data;
 
-      if (message.type === 'response') {
+      if (message.type === 'response' || message.type === 'result') {
         setLoading(false);
         addMessage('assistant', message.payload);
       } else if (message.type === 'error') {
         setLoading(false);
-        addMessage('assistant', `❌ Error: ${message.payload}`);
+        addMessage('assistant', `[ERR] ${message.payload}`);
       } else if (message.type === 'progress') {
         // Show progress indicator
         showProgress(message.payload);
+      } else if (message.type === 'fileContent') {
+        // Auto-loaded code from editor
+        inputField.value = inputField.value + '\n\n' + message.payload.content;
       }
     });
 

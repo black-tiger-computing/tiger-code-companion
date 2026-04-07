@@ -15,7 +15,7 @@ Everything that runs in Node.js with no VS Code dependency:
 | `src/core-engine.js` | Singleton AI router — all providers go through here |
 | `src/provider-registry.js` | Provider definitions, model catalog, local detection |
 | `src/local-agent.js` | Autonomous task agent — plans, executes, self-corrects |
-| `src/mcp-server.js` | MCP protocol server + REST HTTP API |
+| `src/mcp-server.js` | MCP protocol server (stdio only) |
 | `src/concept-to-reality.js` | Interactive guided build session (CLI) |
 | `src/cli.js` | Full CLI tool — analyze, chat, vibecode, server, daemon |
 
@@ -25,8 +25,7 @@ Everything that runs in Node.js with no VS Code dependency:
 
 ### Working
 - CLI commands: `analyze`, `chat`, `vibecode`, `config`, `test-connection`, `version`
-- HTTP server mode (`server --port 3000`) with `/health`, `/chat`, `/analyze`
-- MCP server in both stdio and HTTP modes
+- MCP server in stdio mode (JSON-RPC over stdin/stdout)
 - Provider registry with all 9 providers defined
 - Model catalog with 7 downloadable GGUF models
 - Core engine with OpenAI-compatible, Anthropic, and Google API formats
@@ -58,8 +57,8 @@ Wrap `callAI()` with exponential backoff for 429 (rate limit) and 503 (service u
 ### 4. Fix Model Download Redirects (`provider-registry.js`)
 HuggingFace download URLs redirect. The current `downloadModel()` calls itself recursively on redirect but passes the original URL again instead of the redirect location. Fix to follow the `Location` header.
 
-### 5. Add Streaming Support (`core-engine.js` + `mcp-server.js`)
-Add an optional `stream: true` path to `callAI()` that uses chunked responses and emits via a callback. The MCP HTTP server `/chat` endpoint should support SSE (Server-Sent Events) for streaming.
+### 5. Add Streaming Support (`core-engine.js`)
+Add an optional `stream: true` path to `callAI()` that uses chunked responses and emits via a callback. The callback is passed directly to the caller — no HTTP involved.
 
 ### 6. Provider Health Check (`core-engine.js`)
 Add a `checkProviderHealth()` method that pings each configured provider and caches the result for 60 seconds. Used by CLI `test-connection` and MCP `/health`.
@@ -75,19 +74,10 @@ Add a `checkProviderHealth()` method that pings each configured provider and cac
 
 ## API Contract (Backend → Frontend)
 
-The VS Code extension (`extension.ts`) calls the backend via these interfaces.
+The VS Code extension (`extension.ts`) calls the backend via direct Node.js `require()` — no HTTP, no sockets.
 Do not change these signatures — Qwen's frontend depends on them.
 
-### HTTP Server Endpoints
-```
-GET  /health                          → { status, version }
-POST /chat    { message, session_id } → { response }
-POST /analyze { code, language, mode} → { analysis }
-GET  /tools                           → { tools[] }
-POST /call    { name, args }          → { result }
-```
-
-### Core Engine Methods (used by extension.ts directly)
+### Core Engine Methods
 ```js
 const { getCoreEngine } = require('./core-engine');
 const engine = getCoreEngine();
@@ -135,14 +125,9 @@ node src/cli.js help
 node src/cli.js test-connection
 node src/cli.js chat
 
-# Test HTTP server
-node src/cli.js server --port 3000
-curl http://localhost:3000/health
-curl -X POST http://localhost:3000/chat -H "Content-Type: application/json" -d "{\"message\":\"hello\"}"
-
-# Test MCP server
-node src/mcp-server.js --http --port=3001
-curl http://localhost:3001/tools
+# Test MCP server (stdio mode only)
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | node src/mcp-server.js
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' | node src/mcp-server.js
 
 # Test provider registry
 node src/provider-registry.js detect

@@ -171,15 +171,6 @@ Commands:
     --language <lang>         Target language
     --file <path>             Read code from file
 
-  server [--port 3000]        Start local HTTP server
-    GET  /health              Health check
-    POST /chat                Natural language chat
-    POST /analyze             Code analysis
-
-  daemon                      Start background daemon
-  daemon stop                 Stop running daemon
-  daemon status               Check daemon status
-
   concept                     Start concept-to-reality session
   build                       Same as concept
   create                      Same as concept
@@ -199,10 +190,6 @@ Examples:
   tiger-code-pilot chat
   tiger-code-pilot vibecode generate "REST API in Python" --language python
   tiger-code-pilot vibecode refactor --file src/app.js
-  tiger-code-pilot server --port 3000
-  tiger-code-pilot daemon
-  tiger-code-pilot daemon status
-  tiger-code-pilot daemon stop
   tiger-code-pilot concept
   tiger-code-pilot config set openai sk-xxx
   tiger-code-pilot test-connection
@@ -814,14 +801,6 @@ switch (command) {
 
   case 'vibecode':
     handleVibecode(args);
-    break;
-
-  case 'server':
-    startServer(args);
-    break;
-
-  case 'daemon':
-    startDaemon(args);
     break;
 
   case 'providers':

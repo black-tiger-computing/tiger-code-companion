@@ -880,6 +880,10 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
 </html>`;
 }
 
+// Panel references — reuse existing panels
+let _chatPanel: vscode.WebviewPanel | undefined;
+let _progressPanel: vscode.WebviewPanel | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
   // Register onboarding command
   const onboardingDisposable = vscode.commands.registerCommand('codePilot.onboarding', () => {
@@ -890,6 +894,11 @@ export function activate(context: vscode.ExtensionContext) {
   const testConnectionDisposable = vscode.commands.registerCommand('codePilot.testConnection', async () => {
     const state = await loadStoredState(context);
     await testConnection(context, state);
+  });
+
+  // Register progress dashboard command
+  const progressDisposable = vscode.commands.registerCommand('codePilot.agentProgress', () => {
+    openProgressPanel(context);
   });
 
   // Load stored state
@@ -905,6 +914,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
       onboardingDisposable,
       testConnectionDisposable,
+      progressDisposable,
       openChatDisposable,
       startDisposable
     );
@@ -919,14 +929,27 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function openCopilotPanel(context: vscode.ExtensionContext, state: CopilotState) {
+  // Reuse existing panel if it still exists
+  if (_chatPanel) {
+    _chatPanel.reveal(vscode.ViewColumn.Two);
+    return;
+  }
+
   const storageData = getStorageData(context);
 
   const panel = vscode.window.createWebviewPanel(
     'tigerCodePilot',
     'Tiger Code Pilot',
-    vscode.ViewColumn.One,
+    vscode.ViewColumn.Two,
     { enableScripts: true }
   );
+
+  _chatPanel = panel;
+
+  // Reset panel reference when disposed
+  panel.onDidDispose(() => {
+    _chatPanel = undefined;
+  });
 
   panel.webview.html = getWebviewHtml(state, storageData);
 
@@ -964,11 +987,30 @@ function openCopilotPanel(context: vscode.ExtensionContext, state: CopilotState)
           state.codeInput = payload.codeInput;
           state.endpointUrl = payload.endpointUrl || getEndpointUrlForProvider(state.provider);
 
-          const result = await callCopilot(state);
-          panel.webview.postMessage({ type: 'result', payload: result });
+          // Wire to Core Engine (stub — will be replaced by backend team)
+          const { getCoreEngine } = require('./core-engine');
+          const engine = getCoreEngine();
+          engine.setApiKey(state.apiKey);
+          engine.setEndpoint(state.endpointUrl);
+          engine.setModel(state.preset || state.model);
+
+          // Streaming with graceful fallback
+          if (typeof engine.chatStream === 'function') {
+            await engine.chatStream(
+              state.prompt,
+              'tiger-code-pilot-session',
+              (chunk: string) => {
+                panel.webview.postMessage({ type: 'response', payload: chunk });
+              }
+            );
+          } else {
+            // Fallback to full response
+            const result = await engine.chat(state.prompt, 'tiger-code-pilot-session');
+            panel.webview.postMessage({ type: 'response', payload: result });
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          panel.webview.postMessage({ type: 'result', payload: `Error: ${errorMessage}` });
+          panel.webview.postMessage({ type: 'error', payload: errorMessage });
         }
         break;
       }
@@ -994,7 +1036,7 @@ function openCopilotPanel(context: vscode.ExtensionContext, state: CopilotState)
           });
         } else {
           panel.webview.postMessage({
-            type: 'result',
+            type: 'error',
             payload: 'No active editor found. Open a file first.'
           });
         }
@@ -1028,6 +1070,36 @@ function openCopilotPanel(context: vscode.ExtensionContext, state: CopilotState)
       }
     }
   });
+}
+
+function openProgressPanel(context: vscode.ExtensionContext) {
+  // Reuse existing panel
+  if (_progressPanel) {
+    _progressPanel.reveal(vscode.ViewColumn.Two);
+    return;
+  }
+
+  const panel = vscode.window.createWebviewPanel(
+    'tigerCodePilotProgress',
+    'Agent Progress',
+    vscode.ViewColumn.Two,
+    { enableScripts: true }
+  );
+
+  _progressPanel = panel;
+
+  panel.onDidDispose(() => {
+    _progressPanel = undefined;
+  });
+
+  // Read the progress dashboard HTML
+  const fs = require('fs');
+  const dashboardPath = path.join(context.extensionPath, 'src', 'ui', 'progress-dashboard.html');
+  const html = fs.existsSync(dashboardPath)
+    ? fs.readFileSync(dashboardPath, 'utf-8')
+    : '<html><body><h1>Agent Progress Dashboard</h1><p>No active tasks.</p></body></html>';
+
+  panel.webview.html = html;
 }
 
 async function callCopilot(state: CopilotState): Promise<string> {

@@ -68,12 +68,12 @@ When the backend supports streaming (see BACKEND_PIECE.md), update the webview m
 
 ## API Contract (Frontend → Backend)
 
-The extension calls the backend via these interfaces.
+The extension calls the backend via direct Node.js `require()` — no HTTP, no sockets.
 Do not change these — the backend (Amazon Q) implements them.
 
 ### Core Engine (direct import)
 ```ts
-import { getCoreEngine } from './core-engine';
+const { getCoreEngine } = require('./core-engine');
 const engine = getCoreEngine();
 
 engine.chat(message: string, sessionId: string): Promise<string>
@@ -81,13 +81,8 @@ engine.analyze(code: string, language: string, mode: string): Promise<string>
 engine.vibecode(action: string, params: object): Promise<string>
 engine.switchProvider(name: string): void
 engine.getConfig(): object
-```
-
-### HTTP Fallback (if running as server)
-```
-POST http://localhost:3000/chat    { message, session_id } → { response }
-POST http://localhost:3000/analyze { code, language, mode } → { analysis }
-GET  http://localhost:3000/health  → { status, version }
+// Streaming variant — callback receives each chunk as it arrives
+engine.chatStream(message: string, sessionId: string, onChunk: (chunk: string) => void): Promise<void>
 ```
 
 ### Webview ↔ Extension Messages
