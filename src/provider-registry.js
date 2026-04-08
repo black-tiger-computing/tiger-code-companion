@@ -20,44 +20,11 @@ const MODELS_DIR = path.join(CONFIG_DIR, 'models');
 // ─── Provider definitions ─────────────────────────────────────────────────────
 
 const PROVIDER_REGISTRY = {
-  openai: {
-    name: 'OpenAI', type: 'cloud',
-    baseUrl: PROVIDER_ENDPOINTS.openai,
-    apiKeyEnv: 'OPENAI_API_KEY',
-    models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini'],
-    features: ['chat', 'code', 'analyze'],
-    pricing: 'paid', speed: 'fast', quality: 'excellent'
-  },
-  anthropic: {
-    name: 'Anthropic Claude', type: 'cloud',
-    baseUrl: PROVIDER_ENDPOINTS.anthropic,
-    apiKeyEnv: 'ANTHROPIC_API_KEY',
-    models: ['claude-opus-4-20250414', 'claude-sonnet-4-20250514', 'claude-haiku-20241022'],
-    features: ['chat', 'code', 'analyze'],
-    pricing: 'paid', speed: 'fast', quality: 'excellent'
-  },
-  google: {
-    name: 'Google Gemini', type: 'cloud',
-    baseUrl: PROVIDER_ENDPOINTS.google,
-    apiKeyEnv: 'GOOGLE_API_KEY',
-    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
-    features: ['chat', 'code', 'analyze', 'vision'],
-    pricing: 'free-tier', speed: 'very-fast', quality: 'very-good'
-  },
-  huggingface: {
-    name: 'HuggingFace', type: 'cloud',
-    baseUrl: PROVIDER_ENDPOINTS.huggingface,
-    apiKeyEnv: 'HUGGINGFACE_API_KEY',
-    models: ['meta-llama/Llama-3.3-70B-Instruct', 'mistralai/Mixtral-8x7B-Instruct', 'Salesforce/codegen-350M-mono'],
-    features: ['chat', 'code'],
-    pricing: 'free-tier', speed: 'medium', quality: 'good'
-  },
   ollama: {
     name: 'Ollama (Local)', type: 'local',
     baseUrl: PROVIDER_ENDPOINTS.ollama,
     listUrl: 'http://localhost:11434/api/tags',
-    apiKeyEnv: null,
-    models: [],
+    apiKeyEnv: null, models: [],
     features: ['chat', 'code', 'analyze'],
     pricing: 'free', speed: 'varies', quality: 'varies'
   },
@@ -65,32 +32,14 @@ const PROVIDER_REGISTRY = {
     name: 'LM Studio (Local)', type: 'local',
     baseUrl: PROVIDER_ENDPOINTS.lmstudio,
     listUrl: 'http://localhost:1234/v1/models',
-    apiKeyEnv: null,
-    models: [],
+    apiKeyEnv: null, models: [],
     features: ['chat', 'code', 'analyze'],
     pricing: 'free', speed: 'varies', quality: 'varies'
-  },
-  groq: {
-    name: 'Groq', type: 'cloud',
-    baseUrl: PROVIDER_ENDPOINTS.groq,
-    apiKeyEnv: 'GROQ_API_KEY',
-    models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
-    features: ['chat', 'code', 'analyze'],
-    pricing: 'free-tier', speed: 'ultra-fast', quality: 'very-good'
-  },
-  openrouter: {
-    name: 'OpenRouter', type: 'cloud',
-    baseUrl: PROVIDER_ENDPOINTS.openrouter,
-    apiKeyEnv: 'OPENROUTER_API_KEY',
-    models: ['openai/gpt-4o', 'anthropic/claude-sonnet-4', 'google/gemini-2.5-pro', 'meta-llama/llama-3.3-70b-instruct'],
-    features: ['chat', 'code', 'analyze'],
-    pricing: 'paid', speed: 'varies', quality: 'excellent'
   },
   local: {
     name: 'Custom Local Server', type: 'local',
     baseUrl: PROVIDER_ENDPOINTS.local,
-    apiKeyEnv: null,
-    models: [],
+    apiKeyEnv: null, models: [],
     features: ['chat', 'code', 'analyze'],
     pricing: 'free', speed: 'varies', quality: 'varies'
   }

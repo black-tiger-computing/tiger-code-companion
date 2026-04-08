@@ -21,7 +21,7 @@
 
 ## Overview
 
-**Tiger Code Pilot** is an open-source AI coding assistant designed for developers who want a local-first, multi-modal toolchain — from an IDE-integrated chat panel to an autonomous agent that can scaffold, implement, and commit complete features from a single high-level prompt.
+**Tiger Code Pilot** is an open-source AI coding assistant designed for developers who want a local-first, multi-modal toolchain — from an IDE-integrated chat panel to an autonomous agent that can scaffold, implement, and commit complete features from a single high-level prompt. All inference runs on your own hardware — no data ever leaves your machine.
 
 It ships as three surfaces backed by a single core engine:
 
@@ -31,14 +31,14 @@ It ships as three surfaces backed by a single core engine:
 | **CLI Tool** | Full-featured terminal interface with analyze, chat, vibecode, and server modes |
 | **MCP Server** | Model Context Protocol implementation for Claude Desktop, Cursor, and compatible clients |
 
-At the center sits the **Local Agent** — an autonomous planner that decomposes goals into executable steps: reading the codebase, generating files, running tests, applying fixes, and committing results.
+At the center sits the **Local Agent** — an autonomous planner that decomposes goals into executable steps: reading the codebase, generating files, running tests, applying fixes, and committing results. All powered by local models via Ollama, LM Studio, or any OpenAI-compatible local server.
 
 ---
 
 ## Features
 
-### AI Provider Agnostic
-Connect to any provider — cloud or local. Switch between OpenAI, Anthropic Claude, Google Gemini, HuggingFace, Groq, OpenRouter, Ollama, LM Studio, or any OpenAI-compatible HTTP endpoint. All keys and model selection are managed through a single configuration layer.
+### Local-First AI Provider Support
+All inference runs on your own hardware. Connect to Ollama, LM Studio, or any OpenAI-compatible local HTTP endpoint (llama.cpp, text-generation-webui, etc.). No API keys, no data egress, no vendor lock-in.
 
 ### Vibecode Actions
 Natural-language driven code workflows:
@@ -91,8 +91,8 @@ Download and run models offline via Ollama or LM Studio. Supported models includ
        ┌────────────────┼────────────────┐
        │                │                 │
 ┌──────▼──────┐  ┌─────▼──────┐  ┌───────▼────────┐
-│ Cloud APIs  │  │  Ollama    │  │  LM Studio     │
-│ OpenAI, etc │  │  (Local)   │  │  (Local)       │
+│  Ollama    │  │  LM Studio │  │  Custom Local  │
+│  (Local)   │  │  (Local)   │  │  Server        │
 └─────────────┘  └────────────┘  └────────────────┘
 ```
 
@@ -180,17 +180,11 @@ API keys can also be supplied via environment variables (`OPENAI_API_KEY`, `ANTH
 
 ## Supported Providers
 
-| Provider | Type | Free Tier |
+| Provider | Type | API Key |
 |---|---|---|
-| OpenAI | Cloud | No |
-| Anthropic Claude | Cloud | No |
-| Google Gemini | Cloud | Yes |
-| HuggingFace | Cloud | Yes |
-| Groq | Cloud | Yes |
-| OpenRouter | Cloud | Varies |
-| Ollama | Local | Free |
-| LM Studio | Local | Free |
-| Custom HTTP | Local | Free |
+| Ollama | Local | Not required |
+| LM Studio | Local | Not required |
+| Custom Local Server | Local | Not required |
 
 ---
 

@@ -76,23 +76,23 @@ async function main() {
 
   await test('loadConfig returns defaults when no file exists', () => {
     const c = loadConfig();
-    assert.strictEqual(c.provider, 'openai');
-    assert.strictEqual(c.model, 'gpt-4o-mini');
+    assert.strictEqual(c.provider, 'ollama');
+    assert.strictEqual(c.model, 'llama3.2');
     assert.strictEqual(c.settings.temperature, 0.7);
   });
 
   await test('saveConfig / loadConfig round-trip', () => {
     const c = loadConfig();
-    c.model = 'gpt-4o';
+    c.model = 'deepseek-coder-6.7b';
     saveConfig(c);
-    assert.strictEqual(loadConfig().model, 'gpt-4o');
+    assert.strictEqual(loadConfig().model, 'deepseek-coder-6.7b');
   });
 
   await test('loadConfig merges missing keys with defaults', () => {
     const configFile = path.join(TEST_HOME, '.tiger-code-pilot', 'config.json');
-    fs.writeFileSync(configFile, JSON.stringify({ provider: 'groq', model: 'llama-3.3-70b-versatile' }));
+    fs.writeFileSync(configFile, JSON.stringify({ provider: 'lmstudio', model: 'llama-3.2' }));
     const c = loadConfig();
-    assert.strictEqual(c.provider, 'groq');
+    assert.strictEqual(c.provider, 'lmstudio');
     assert.ok(c.settings, 'settings should be merged from defaults');
   });
 
@@ -100,15 +100,15 @@ async function main() {
     const configFile = path.join(TEST_HOME, '.tiger-code-pilot', 'config.json');
     fs.writeFileSync(configFile, '{ not valid json !!!');
     const c = loadConfig();
-    assert.strictEqual(c.provider, 'openai');
+    assert.strictEqual(c.provider, 'ollama');
   });
 
   await test('repairConfig resets to defaults', () => {
     const c = loadConfig();
-    c.provider = 'groq';
+    c.provider = 'local';
     saveConfig(c);
     repairConfig();
-    assert.strictEqual(loadConfig().provider, 'openai');
+    assert.strictEqual(loadConfig().provider, 'ollama');
   });
 
   // ── Core Engine ──────────────────────────────────────────────────────────────
@@ -176,25 +176,19 @@ async function main() {
     assert.strictEqual(result, 'Nothing to condense yet.');
   });
 
-  await test('checkHealth returns true when API key is set', async () => {
-    const c = loadConfig();
-    c.apiKeys = { openai: 'sk-test' };
-    saveConfig(c);
-    assert.strictEqual(await getCoreEngine().checkHealth('openai'), true);
+  await test('checkHealth returns true when provider is reachable', async () => {
+    assert.strictEqual(await getCoreEngine().checkHealth('ollama'), true);
   });
 
-  await test('checkHealth returns false when no API key', async () => {
-    const c = loadConfig();
-    c.apiKeys = {};
-    saveConfig(c);
-    assert.strictEqual(await getCoreEngine().checkHealth('anthropic'), false);
+  await test('checkHealth returns false for unknown provider', async () => {
+    assert.strictEqual(await getCoreEngine().checkHealth('nonexistent'), false);
   });
 
   // ── Provider Registry ────────────────────────────────────────────────────────
   console.log('\n🗂️  Provider Registry');
 
-  await test('PROVIDER_REGISTRY has all 9 providers', () => {
-    const expected = ['openai','anthropic','google','huggingface','ollama','lmstudio','groq','openrouter','local'];
+  await test('PROVIDER_REGISTRY has 3 local providers', () => {
+    const expected = ['ollama', 'lmstudio', 'local'];
     for (const id of expected) assert.ok(PROVIDER_REGISTRY[id], `Missing: ${id}`);
   });
 
@@ -206,19 +200,19 @@ async function main() {
   });
 
   await test('setActiveProvider writes to config.json', () => {
-    setActiveProvider('groq');
-    assert.strictEqual(loadConfig().provider, 'groq');
+    setActiveProvider('lmstudio');
+    assert.strictEqual(loadConfig().provider, 'lmstudio');
   });
 
   await test('setProviderApiKey / getProviderApiKey round-trip', () => {
-    setProviderApiKey('groq', 'gsk-test');
-    assert.strictEqual(getProviderApiKey('groq'), 'gsk-test');
+    setProviderApiKey('local', 'local-key');
+    assert.strictEqual(getProviderApiKey('local'), 'local-key');
   });
 
   await test('getProviderApiKey falls back to env var', () => {
-    process.env.ANTHROPIC_API_KEY = 'env-key';
-    assert.strictEqual(getProviderApiKey('anthropic'), 'env-key');
-    delete process.env.ANTHROPIC_API_KEY;
+    process.env.OLLAMA_API_KEY = 'env-key';
+    assert.strictEqual(getProviderApiKey('ollama'), 'env-key');
+    delete process.env.OLLAMA_API_KEY;
   });
 
   await test('detectLocalProviders detects ollama', async () => {
