@@ -1,7 +1,7 @@
 # Tiger Code Pilot
 
 <p align="center">
-  <img src="images/tiger-logo.svg" alt="Tiger Code Pilot" width="220"/>
+  <img src="images/tgclogo.jpg" alt="Tiger Code Pilot" width="220"/>
 </p>
 
 <p align="center">
