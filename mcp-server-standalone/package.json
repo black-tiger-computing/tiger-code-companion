@@ -1,0 +1,55 @@
+{
+  "name": "@tiger-code/mcp-server",
+  "version": "1.0.0",
+  "description": "Official Model Context Protocol (MCP) server for Tiger Code Pilot — AI coding assistant with 15+ tools for code analysis, generation, debugging, git operations, and file management.",
+  "main": "index.js",
+  "bin": {
+    "tiger-code-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "start:http": "node index.js --http",
+    "start:http:dev": "node index.js --http 3001",
+    "test": "node test.js",
+    "test:watch": "node --watch test.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prepublishOnly": "npm test && npm run lint"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "coding-assistant",
+    "code-generation",
+    "code-analysis",
+    "debugging",
+    "git",
+    "claude",
+    "cursor",
+    "tiger-code",
+    "tiger-code-pilot"
+  ],
+  "author": "Tiger Code Pilot Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tiger-code-pilot/tiger-code-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tiger-code-pilot/tiger-code-mcp-server/issues"
+  },
+  "homepage": "https://github.com/tiger-code-pilot/tiger-code-mcp-server#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "index.js",
+    "test.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

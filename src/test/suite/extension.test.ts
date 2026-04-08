@@ -5,7 +5,7 @@ suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
 
   test('Extension should be present', async () => {
-    const extension = vscode.extensions.getExtension('your-name.tiger-code-pilot');
+    const extension = vscode.extensions.getExtension('tiger-code-pilot.tiger-code-pilot');
     assert.ok(extension, 'Extension is not installed');
   });
 

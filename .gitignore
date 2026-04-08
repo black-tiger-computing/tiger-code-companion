@@ -6,3 +6,7 @@ out/
 .DS_Store
 *.log
 .qwen/
+.claude/
+*.html
+eslint-report.json
+mcp-eslint-report.json

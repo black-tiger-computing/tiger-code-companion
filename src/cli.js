@@ -8,13 +8,16 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { spawn } = require('child_process');
+const http = require('http');
 const { getCoreEngine, loadConfig, saveConfig, repairConfig, PROVIDER_ENDPOINTS } = require('./core-engine');
+const { classifyIntent, intentToTool, buildToolArgs } = require('./intent-classifier');
 const providerRegistry = require('./provider-registry');
+const modelSetup = require('./model-setup');
 
 const VERSION = '0.4.0';
 const CONFIG_DIR = path.join(require('os').homedir(), '.tiger-code-pilot');
-const CONFIG_FILE = path.join(CONFIG_DIR, '.tiger-code-pilot', 'config.json');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+const MCP_SERVER_JSON = path.join(CONFIG_DIR, 'server.json');
 
 const C = {
   reset: '\x1b[0m', bright: '\x1b[1m',
@@ -57,7 +60,7 @@ function startInteractiveChat() {
   const sessionId = `cli-${Date.now()}`;
 
   log('🐯 Tiger Code Pilot — Interactive Chat', 'cyan');
-  log('Type your questions. "condense" to compress history. "exit" to quit.', 'blue');
+  log('Type naturally — I\'ll figure out what you need. "exit" to quit.', 'blue');
   log('─'.repeat(60), 'bright');
 
   const ask = () => {
@@ -69,14 +72,25 @@ function startInteractiveChat() {
       }
       if (trimmed.toLowerCase() === 'condense' || trimmed.toLowerCase() === 'chunk') {
         log('⏳ Condensing session...', 'yellow');
-        const summary = await engine.condenseSession(sessionId);
-        log('✅ Condensed:\n' + summary, 'green');
+        try {
+          const summary = await engine.condenseSession(sessionId);
+          log('✅ Condensed:\n' + summary, 'green');
+        } catch (e) { log(`❌ ${e.message}`, 'red'); }
         ask(); return;
       }
 
-      log('\n⏳ Thinking...', 'yellow');
+      // Classify intent
+      const classification = classifyIntent(trimmed);
+      const toolName = intentToTool(classification.intent);
+      const toolArgs = buildToolArgs(classification.intent, trimmed, {
+        session_id: sessionId
+      });
+
+      log(`\n⏳ [${classification.intent}] (confidence: ${(classification.confidence * 100).toFixed(0)}%)`, 'yellow');
+
+      // Try MCP server first, fall back to direct core-engine call
       try {
-        const reply = await engine.chat(trimmed, sessionId);
+        const reply = await callViaMcpOrFallback(toolName, toolArgs, engine, trimmed, sessionId);
         log('\n' + reply, 'green');
       } catch (e) {
         log(`❌ ${e.message}`, 'red');
@@ -85,6 +99,100 @@ function startInteractiveChat() {
     });
   };
   ask();
+}
+
+/**
+ * Try calling the tool via MCP HTTP server first, fall back to direct core-engine.
+ */
+async function callViaMcpOrFallback(toolName, toolArgs, engine, input, sessionId) {
+  // Try MCP server first
+  const serverInfo = readMcpServerJson();
+  if (serverInfo && isProcessRunning(serverInfo.pid)) {
+    try {
+      const result = await callMcpTool(serverInfo.port, toolName, toolArgs);
+      return result;
+    } catch (e) {
+      // MCP call failed — fall through to direct
+    }
+  }
+
+  // Direct core-engine fallback
+  switch (toolName) {
+    case 'chat':
+      return await engine.chat(input, sessionId);
+    case 'analyze_code':
+      return await engine.analyze(toolArgs.code || input, toolArgs.language || 'code', toolArgs.mode || 'general');
+    case 'debug_code':
+      return await engine.vibecode('debug', { code: toolArgs.code || input, error_message: toolArgs.error_message || '' });
+    case 'generate_code':
+      return await engine.vibecode('generate', { description: input, language: toolArgs.language || 'auto' });
+    case 'explain_code':
+      return await engine.vibecode('explain', { code: toolArgs.code || input });
+    case 'refactor_code':
+      return await engine.vibecode('refactor', { code: toolArgs.code || input });
+    case 'write_tests':
+      return await engine.vibecode('test', { code: toolArgs.code || input, framework: toolArgs.framework || '' });
+    default:
+      return await engine.chat(input, sessionId);
+  }
+}
+
+/**
+ * Call a tool on the MCP HTTP server.
+ */
+function callMcpTool(port, name, args) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({ name, arguments: args });
+    const req = http.request({
+      hostname: 'localhost',
+      port,
+      path: '/tools/call',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 60000
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) reject(new Error(parsed.error));
+          else resolve(parsed.content || parsed.result || 'Tool returned no content');
+        } catch (e) { reject(new Error(`MCP parse error: ${e.message}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('MCP server timeout')); });
+    req.write(postData);
+    req.end();
+  });
+}
+
+/**
+ * Read server.json to find running MCP server.
+ */
+function readMcpServerJson() {
+  try {
+    if (fs.existsSync(MCP_SERVER_JSON)) {
+      return JSON.parse(fs.readFileSync(MCP_SERVER_JSON, 'utf8'));
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+/**
+ * Check if a process is running (cross-platform).
+ */
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 // ─── Vibecode ─────────────────────────────────────────────────────────────────
@@ -287,6 +395,7 @@ function showHelp() {
 Usage: tiger-code-pilot <command> [options]
 
 Commands:
+  setup                       Interactive model selection & onboarding
   analyze <file>              Analyze code with AI
     --mode general|security|performance|bugs
 
@@ -312,8 +421,9 @@ Commands:
   config repair               Reset config to defaults
 
   providers                   List all providers with status
+  models [category]           Show available AI models (all/recommended/code/free)
+  stack                       Display multi-provider stack overview
   detect                      Auto-detect local providers (Ollama, LM Studio)
-  models [category]           Show downloadable model catalog
   model install <id>          Download and install a local model
   model list                  List installed models
 
@@ -321,7 +431,7 @@ Commands:
   version                     Show version
   help                        Show this help
 
-Providers: ollama, lmstudio, local (local-first, no API keys needed)
+Providers: qwen (free 2K/day), groq (free Llama), huggingface (free tier), ollama, lmstudio, local
 Config: ${CONFIG_FILE}
 `, 'cyan');
 }
@@ -386,6 +496,23 @@ const command = args[0];
       break;
     }
 
+    case 'setup':
+      await modelSetup.runOnboarding();
+      break;
+
+    case 'models':
+      modelSetup.displayModelList(args[1] || 'all');
+      break;
+
+    case 'stack':
+      modelSetup.displayProviderStack();
+      break;
+
+    case 'usage': case 'analytics': case 'dashboard':
+      const usageAnalytics = require('./usage-analytics');
+      usageAnalytics.showDashboard();
+      break;
+
     case 'test-connection':
       await testConnection();
       break;
@@ -408,7 +535,7 @@ const command = args[0];
       }
       break;
 
-    case 'models': case 'model': case 'detect':
+    case 'model': case 'detect':
       providerRegistry.main();
       break;
 

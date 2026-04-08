@@ -20,6 +20,36 @@ const MODELS_DIR = path.join(CONFIG_DIR, 'models');
 // ─── Provider definitions ─────────────────────────────────────────────────────
 
 const PROVIDER_REGISTRY = {
+  qwen: {
+    name: 'Qwen (Alibaba Cloud)', type: 'cloud',
+    baseUrl: PROVIDER_ENDPOINTS.qwen,
+    apiKeyEnv: 'DASHSCOPE_API_KEY',
+    models: [],
+    features: ['chat', 'code', 'analyze'],
+    pricing: 'free-tier', speed: 'fast', quality: 'excellent',
+    freeLimit: '2,000 requests/day',
+    signupUrl: 'https://bailian.console.alibabacloud.com/'
+  },
+  groq: {
+    name: 'Groq (Free Llama/Mixtral)', type: 'cloud',
+    baseUrl: PROVIDER_ENDPOINTS.groq,
+    apiKeyEnv: 'GROQ_API_KEY',
+    models: [],
+    features: ['chat', 'code', 'analyze'],
+    pricing: 'free-tier', speed: 'very-fast', quality: 'excellent',
+    freeLimit: 'Generous RPM/RPD limits',
+    signupUrl: 'https://console.groq.com/'
+  },
+  huggingface: {
+    name: 'HuggingFace Inference API', type: 'cloud',
+    baseUrl: PROVIDER_ENDPOINTS.huggingface,
+    apiKeyEnv: 'HF_TOKEN',
+    models: [],
+    features: ['chat', 'code', 'analyze'],
+    pricing: 'free-tier', speed: 'moderate', quality: 'excellent',
+    freeLimit: 'Rate limited',
+    signupUrl: 'https://huggingface.co/settings/tokens'
+  },
   ollama: {
     name: 'Ollama (Local)', type: 'local',
     baseUrl: PROVIDER_ENDPOINTS.ollama,
@@ -64,7 +94,7 @@ const MODEL_CATALOG = [
   },
   {
     id: 'codeqwen-7b', name: 'CodeQwen 7B',
-    description: "Qwen's code-specialized model",
+    description: "Code-specialized model",
     size: '4.4 GB', quantization: 'Q4_K_M', category: 'code',
     quality: 'very-good', speed: 'fast', ram: '8 GB',
     url: 'https://huggingface.co/Qwen/CodeQwen1.5-7B-Chat-GGUF/resolve/main/codeqwen1.5-7b-chat-q4_k_m.gguf'
@@ -226,8 +256,19 @@ async function downloadModel(modelId, progressCallback = null) {
           resolve({ installed: true, path: filePath, model });
         });
 
-        res.on('error', err => { fileStream.destroy(); try { fs.unlinkSync(filePath); } catch (e) {} reject(err); });
-      }).on('error', err => { try { fs.unlinkSync(filePath); } catch (e) {} reject(err); });
+        res.on('error', err => {
+          fileStream.destroy();
+          try { fs.unlinkSync(filePath); } catch (e) {
+            console.error(`⚠️  Cleanup failed: ${e.message}`);
+          }
+          reject(err);
+        });
+      }).on('error', err => {
+        try { fs.unlinkSync(filePath); } catch (e) {
+          console.error(`⚠️  Cleanup failed: ${e.message}`);
+        }
+        reject(err);
+      });
     }
 
     fetchUrl(model.url);

@@ -1,8 +1,6 @@
 # Tiger Code Pilot — Frontend / Extension Piece
 
 > This document covers the frontend half of the project.
-> Qwen Code Copilot is responsible for this piece.
-> Amazon Q is responsible for the Backend piece (see BACKEND_PIECE.md).
 
 ---
 
@@ -28,48 +26,49 @@ Everything that runs inside VS Code:
 ## Current Status
 
 ### Working
-- VS Code commands registered: `openChat`, `start` (analyze), `onboarding`, `testConnection`
+- VS Code commands registered: `openChat`, `start` (analyze), `onboarding`, `testConnection`, `agentProgress`
 - Webview chat panel with dark theme, animated `</>` logo, code block rendering
-- Quick action buttons: Analyze, Explain, Refactor, Tests, Debug, Optimize
+- Quick action buttons: Analyze, Explain, Refactor, Tests, Debug, Optimize — auto-load editor code and run
 - Onboarding wizard with free model setup (HuggingFace, Ollama, OpenAI)
 - API key secure storage via `vscode.SecretStorage`
 - Provider/model preferences persisted via `vscode.globalState`
 - Load code from active editor into chat context
 - Save/load prompts and code snippets in local storage
+- Panel reuse — `openCopilotPanel()` checks for existing panel and reveals it
+- Streaming responses — webview appends chunks incrementally (not replace)
+- Core Engine wired — `run` handler calls `getCoreEngine().chatStream()` with chunked updates
+- Progress dashboard — `codePilot.agentProgress` command opens live step list, wired to `sendStepUpdate()`
+- Auto-start MCP server — extension launches MCP HTTP server on activate if not already running
+- Provider type expanded to all 6 providers (qwen, groq, huggingface, ollama, lmstudio, local)
 
 ### Needs Work
-- `webview.html` — quick action buttons fill the input but don't auto-load selected editor code
-- `extension.ts` — `openCopilotPanel()` creates a new panel every call instead of reusing existing one
-- `extension.ts` — the webview `run` message handler calls `callCopilot()` directly, bypassing `core-engine.js`
-- `extension.ts` — no streaming — response only appears after full completion
-- `src/ui/progress-dashboard.html` — exists but is never opened by any command
-- No sidebar/tree view — everything is a floating panel
+- _(None — all items complete)_
 
 ---
 
 ## What Needs Building
 
-### 1. Reuse Existing Panel (`extension.ts`)
-`openCopilotPanel()` should check if a panel already exists and call `panel.reveal()` instead of creating a new one. Store the panel reference outside the function.
+### ~~1. Reuse Existing Panel (`extension.ts`)~~ ✅ DONE
+`openCopilotPanel()` checks if a panel already exists and calls `panel.reveal()` instead of creating a new one. Panel reference stored in module-scoped `_chatPanel`.
 
-### 2. Wire Webview to Core Engine (`extension.ts`)
-The `run` message handler currently calls a local `callCopilot()` function. Replace it with a call to `getCoreEngine().chat()` from `core-engine.js` so the backend handles all AI routing.
+### ~~2. Wire Webview to Core Engine (`extension.ts`)~~ ✅ DONE
+The `run` message handler calls `getCoreEngine().chatStream()` from `core-engine.js` with chunked streaming updates via `onChunk` callback.
 
-### 3. Auto-Load Editor Code on Quick Actions (`webview.html`)
-When a quick action button is clicked, automatically request the selected editor code via `vscode.postMessage({ type: 'loadFromEditor' })` before filling the prompt, so the user doesn't have to click "Load from Editor" separately.
+### ~~3. Auto-Load Editor Code on Quick Actions (`webview.html`)~~ ✅ DONE
+6 quick action buttons (Analyze, Explain, Refactor, Tests, Debug, Optimize) auto-load editor code via `vscode.postMessage({ type: 'loadFromEditor' })` then auto-trigger the run.
 
-### 4. Hook Up Progress Dashboard (`extension.ts`)
-Add a command `codePilot.agentProgress` that opens `progress-dashboard.html` in a second webview column. The local agent sends progress events — display them here as a live step list.
+### ~~4. Hook Up Progress Dashboard (`extension.ts`)~~ ✅ DONE
+`codePilot.agentProgress` command opens `progress-dashboard.html`. `sendProgress()` and `sendStepUpdate()` helpers broadcast live step updates. `runLocalAgent()` wires agent stderr JSON to dashboard.
 
-### 5. Streaming Responses (`extension.ts` + `webview.html`)
-When the backend supports streaming (see BACKEND_PIECE.md), update the webview message handler to append chunks to the current assistant message instead of waiting for the full response.
+### ~~5. Streaming Responses (`extension.ts` + `webview.html`)~~ ✅ DONE
+Webview message handler appends chunks to output (`out.textContent += event.data.payload`) instead of replacing. `chatStream()` onChunk posts each chunk to webview.
 
 ---
 
 ## API Contract (Frontend → Backend)
 
 The extension calls the backend via direct Node.js `require()` — no HTTP, no sockets.
-Do not change these — the backend (Amazon Q) implements them.
+Do not change these — the backend implements them.
 
 ### Core Engine (direct import)
 ```ts

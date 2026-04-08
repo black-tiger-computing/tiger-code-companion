@@ -100,14 +100,30 @@ Guided session where the user describes what they want to build and the agent bu
 ## CLI Quick Reference
 
 ```bash
+# Core CLI Commands
 tiger-code-pilot analyze src/app.js --mode security
 tiger-code-pilot chat
 tiger-code-pilot vibecode generate "a REST API in Python" --language python
 tiger-code-pilot vibecode refactor --file src/app.js
-tiger-code-pilot server --port 3000
-tiger-code-pilot daemon
-tiger-code-pilot concept
 tiger-code-pilot config set openai sk-xxx
+
+# MCP Server Management
+tiger-code-mcp --http              # Start HTTP MCP server (port 3001)
+tiger-code-mcp --http 8080         # Start on custom port
+tiger-code-mcp                     # Start in stdio mode (for MCP clients)
+
+# MCP Server HTTP API (when running with --http)
+curl http://localhost:3001/health                     # Check server health
+curl http://localhost:3001/tools                      # List all available tools
+curl http://localhost:3001/mcp/catalog                # List available GitHub MCP servers
+curl http://localhost:3001/mcp/installed              # List installed MCP servers
+curl -X POST http://localhost:3001/mcp/install \      # Install a GitHub MCP server
+  -H "Content-Type: application/json" \
+  -d '{"server_id": "github-mcp"}'
+curl http://localhost:3001/mcp/status                 # Get status of installed servers
+curl -X POST http://localhost:3001/mcp/update \       # Update a GitHub MCP server
+  -H "Content-Type: application/json" \
+  -d '{"server_id": "github-mcp"}'
 ```
 
 ---
@@ -120,7 +136,15 @@ tiger-code-pilot config set openai sk-xxx
 
 ## MCP Tools
 
-`analyze_code` · `generate_code` · `explain_code` · `refactor_code` · `debug_code` · `write_tests` · `chat` · `read_file` · `list_directory`
+`analyze_code` · `generate_code` · `explain_code` · `refactor_code` · `debug_code` · `write_tests` · `chat` · `read_file` · `write_file` · `list_directory` · `run_command` · `git_status` · `git_log` · `git_diff` · `git_branch`
+
+## ACP Tools (Agent Communication Protocol)
+
+`acp_send` · `acp_receive` · `acp_register` · `acp_list_agents` · `acp_queue_status` · `acp_broadcast`
+
+## MCP Server Management (HTTP Mode)
+
+`GET /mcp/catalog` · `GET /mcp/installed` · `POST /mcp/install` · `POST /mcp/uninstall` · `GET /mcp/status` · `POST /mcp/update`
 
 ---
 

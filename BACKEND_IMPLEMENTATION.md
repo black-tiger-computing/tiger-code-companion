@@ -1,4 +1,4 @@
-# Tiger Code Pilot — Backend Implementation Guide for Amazon Q
+# Tiger Code Pilot — Backend Implementation Guide
 
 > This doc answers all your questions and locks every design decision.
 > Read this before writing any code.
@@ -317,11 +317,11 @@ Error response:
 
 ## What NOT to Touch
 
-- `src/extension.ts` — Qwen's VS Code extension
-- `src/ui/*` — Qwen's UI files
-- `src/cli.js` — Qwen will update this to route through the server later
+- `src/extension.ts` — VS Code extension
+- `src/ui/*` — UI files
+- `src/cli.js` — CLI
 - `images/*` — Logo assets
-- `FRONTEND_PIECE.md` — Qwen's domain
+- `FRONTEND_PIECE.md` — API contract
 
 ---
 
@@ -340,7 +340,7 @@ Error response:
 
 ## Questions?
 
-- `FRONTEND_PIECE.md` — Qwen's API contract
+- `FRONTEND_PIECE.md` — API contract
 - `ARCHITECTURE.md` — Full system architecture
 - `BACKEND_SPEC.md` — High-level backend spec
 - Current `src/core-engine.js` — stub with locked method signatures

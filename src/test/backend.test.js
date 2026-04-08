@@ -45,6 +45,9 @@ function patchProvider(mod, content = 'mock response') {
 const ollamaMod = require('../providers/ollama');
 const lmstudioMod = require('../providers/lmstudio');
 const localMod = require('../providers/local');
+const qwenMod = require('../providers/qwen');
+const groqMod = require('../providers/groq');
+const hfMod = require('../providers/huggingface');
 patchProvider(ollamaMod);
 patchProvider(lmstudioMod);
 patchProvider(localMod);
@@ -170,16 +173,56 @@ async function main() {
 
   await test('retry does not retry on 400', async () => {
     let attempts = 0;
-    const origFn = ollamaMod.callOllama;
+    const origOllamaFn = ollamaMod.callOllama;
+    const origQwenFn = qwenMod.callQwen;
+    const origGroqFn = groqMod.callGroq;
+    const origHfFn = hfMod.callHuggingFace;
+    const origLmstudioFn = lmstudioMod.callLMStudio;
+    const origLocalFn = localMod.callLocal;
+
+    // Mock all providers to fail with 400 (non-retryable error)
     ollamaMod.callOllama = async () => {
       attempts++;
       const e = new Error('bad request');
       e.response = { status: 400 };
       throw e;
     };
-    await assert.rejects(() => getCoreEngine().chat('bad', 'bad-session'));
+    qwenMod.callQwen = async () => {
+      const e = new Error('bad request');
+      e.response = { status: 400 };
+      throw e;
+    };
+    groqMod.callGroq = async () => {
+      const e = new Error('bad request');
+      e.response = { status: 400 };
+      throw e;
+    };
+    hfMod.callHuggingFace = async () => {
+      const e = new Error('bad request');
+      e.response = { status: 400 };
+      throw e;
+    };
+    lmstudioMod.callLMStudio = async () => {
+      const e = new Error('bad request');
+      e.response = { status: 400 };
+      throw e;
+    };
+    localMod.callLocal = async () => {
+      const e = new Error('bad request');
+      e.response = { status: 400 };
+      throw e;
+    };
+
+    await assert.rejects(() => getCoreEngine().chat('bad', 'bad-session'), /bad request/);
     assert.strictEqual(attempts, 1);
-    ollamaMod.callOllama = origFn;
+
+    // Restore all providers
+    ollamaMod.callOllama = origOllamaFn;
+    qwenMod.callQwen = origQwenFn;
+    groqMod.callGroq = origGroqFn;
+    hfMod.callHuggingFace = origHfFn;
+    lmstudioMod.callLMStudio = origLmstudioFn;
+    localMod.callLocal = origLocalFn;
     resetMock();
   });
 
@@ -326,7 +369,11 @@ async function main() {
   console.log('━'.repeat(50) + '\n');
 
   os.homedir = _realHomedir;
-  try { fs.rmSync(TEST_HOME, { recursive: true, force: true }); } catch (e) {}
+  try {
+    fs.rmSync(TEST_HOME, { recursive: true, force: true });
+  } catch (e) {
+    console.error(`⚠️  Test cleanup failed: ${e.message}`);
+  }
 
   if (failed > 0) process.exit(1);
 }

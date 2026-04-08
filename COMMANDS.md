@@ -1,7 +1,5 @@
 # Tiger Code Pilot — Command Reference
 
-> The core-engine.js stub is a drop-in replacement target.
-> When Amazon Q delivers the real core-engine.js, it replaces the stub with zero frontend changes needed.
 > All method signatures are locked — see BACKEND_PIECE.md for the contract.
 
 ---
@@ -260,7 +258,7 @@ Add to `claude_desktop_config.json`:
 
 ---
 
-## Core Engine API (for extension.ts / Qwen)
+## Core Engine API (for extension.ts)
 
 All backend calls go through `getCoreEngine()` — no direct axios anywhere.
 

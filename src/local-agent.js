@@ -15,6 +15,7 @@ const readline = require('readline');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const { getCoreEngine } = require('./core-engine');
+const { getPluginSystem } = require('./plugin-system');
 
 const execAsync = promisify(exec);
 
@@ -26,16 +27,30 @@ const ALLOWED_COMMANDS = new Set([
   'npm', 'npx', 'node', 'git',
   'echo', 'jest', 'mocha', 'vitest',
   // Windows
-  'dir', 'type', 'copy', 'move',
+  'dir', 'type', 'copy', 'move', 'del', 'ren', 'md', 'rd',
+  'where', 'tasklist', 'taskkill', 'net', 'ping', 'ipconfig',
   // Unix
-  'ls', 'cat', 'cp', 'mv'
+  'ls', 'cat', 'cp', 'mv', 'rm', 'mkdir', 'rmdir', 'touch',
+  'grep', 'find', 'head', 'tail', 'wc', 'sort', 'pwd',
+  'curl', 'wget', 'ssh', 'scp', 'ping', 'ps', 'kill'
 ]);
 
 const DANGEROUS_PATTERNS = [
-  /rm\s+-rf/i, /del\s+\/[sf]/i, /sudo/i,
-  /chmod\s+777/i, /format\s+[a-z]:/i,
-  />\s*\/dev\/null/i, /\|\s*sh\b/i, /\|\s*bash\b/i,
-  /eval\s*\(/i, /exec\s*\(/i
+  /rm\s+-rf\s+\/[^\s]/i,        // rm -rf /something (but allow rm -rf ./local)
+  /rm\s+-rf\s+\$HOME/i,         // rm -rf $HOME
+  /rm\s+-rf\s+~/,               // rm -rf ~/
+  /del\s+\/[sf]\s+[c-z]:/i,     // Windows destructive delete of system drives
+  /sudo\s+/i,                    // privilege escalation
+  /chmod\s+777\s+\/[^\s]/i,     // world-writable system paths
+  /format\s+[c-z]:/i,           // Windows format
+  />\s*\/dev\/null/i,           // redirect to /dev/null
+  />\s*NUL/i,                   // Windows redirect to NUL
+  /\|\s*sh\b/i,                 // pipe to sh
+  /\|\s*bash\b/i,               // pipe to bash
+  /eval\s*\(/i,                 // eval()
+  /exec\s*\(/i,                 // exec()
+  /net\s+user/i,                // user management
+  /net\s+localgroup/i           // group management
 ];
 
 // ─── Path safety ──────────────────────────────────────────────────────────────
@@ -99,6 +114,7 @@ async function gatherContext(workingDir, depth = 2) {
 class LocalAgent {
   constructor() {
     this.engine = getCoreEngine();
+    this.plugins = getPluginSystem();
     this.currentTask = null;
     this.progress = [];
     this.workingDir = process.cwd();
@@ -118,6 +134,31 @@ class LocalAgent {
   _logSync(step, status, details) {
     this.progress.push({ step, status, details, timestamp: new Date().toISOString() });
     if (this.onProgress) this.onProgress({ step, status, details });
+
+    // Emit structured JSON to stderr for extension parsing
+    this._emitProgressEvent(step, status, details);
+  }
+
+  _emitProgressEvent(step, status, details) {
+    const event = {
+      type: 'progress',
+      step,
+      status,
+      details: details || '',
+      stepCount: this.stepCount,
+      timestamp: new Date().toISOString()
+    };
+    // Write as a single JSON line to stderr — one event per line
+    process.stderr.write(JSON.stringify(event) + '\n');
+  }
+
+  _emitInitEvent(goal) {
+    const event = {
+      type: 'init',
+      goal,
+      timestamp: new Date().toISOString()
+    };
+    process.stderr.write(JSON.stringify(event) + '\n');
   }
 
   async logProgress(step, status, details = null) {
@@ -140,6 +181,9 @@ class LocalAgent {
     };
     this.progress = [];
     this.stepCount = 0;
+
+    // Emit task init event for extension
+    this._emitInitEvent(goal);
 
     await this.logProgress('init', 'starting', `Goal: ${goal}`);
 
@@ -202,16 +246,28 @@ Working Directory: ${this.workingDir}
 Context:
 ${context}
 
-Return ONLY a JSON array of steps:
+Return ONLY a JSON array of steps. Available actions:
+- read_file: Read a file (target: path)
+- write_file: Create a new file (target: path, details: content)
+- modify_file: Edit existing file (target: path, details: instructions)
+- run_command: Run a safe command (details: command)
+- git_add: Stage files (target: path or "." for all)
+- git_commit: Commit changes (details: commit message)
+- git_checkout: Switch/create branch (target: branch name)
+- analyze: Analyze progress (no target needed)
+
+Example:
 [
   {
-    "action": "read_file" | "write_file" | "modify_file" | "run_command" | "analyze",
-    "description": "What this step does",
-    "target": "relative file path or empty string",
-    "details": "Exact content or command",
-    "verify": "How to verify success"
+    "action": "write_file",
+    "description": "Create package.json",
+    "target": "package.json",
+    "details": "{...json content...}",
+    "verify": "File exists and is valid JSON"
   }
-]`;
+]
+
+Return ONLY the JSON array, no explanation.`;
 
     const response = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.3 });
     const match = response.match(/\[[\s\S]*\]/);
@@ -219,13 +275,16 @@ Return ONLY a JSON array of steps:
     return { steps: JSON.parse(match[0]) };
   }
 
-  async executeStep(step, context = {}) {
+  async executeStep(step, _context = {}) {
     switch (step.action) {
       case 'read_file':    return await this.readFile(step);
       case 'write_file':   return await this.writeFile(step);
       case 'modify_file':  return await this.modifyFile(step);
       case 'run_command':  return await this.runCommand(step);
       case 'analyze':      return await this.analyzeStep(step);
+      case 'git_commit':   return await this.gitCommit(step);
+      case 'git_add':      return await this.gitAdd(step);
+      case 'git_checkout': return await this.gitCheckout(step);
       default: throw new Error(`Unknown action: ${step.action}`);
     }
   }
@@ -272,6 +331,24 @@ Return ONLY a JSON array of steps:
     const prompt = `Analyze progress toward the goal.\n\nGoal: ${this.currentTask.goal}\nStep: ${step.description}\n\nContext:\n${context}\n\nSummarise: what's done, what's left, any concerns.`;
     const analysis = await this.engine.callAI([{ role: 'user', content: prompt }], { temperature: 0.5 });
     return { summary: 'Analysis complete', analysis };
+  }
+
+  async gitCommit(step) {
+    const message = step.details || step.description || 'Auto-commit by Tiger Agent';
+    return this.plugins.executeTool('git_commit', { message, cwd: this.workingDir });
+  }
+
+  async gitAdd(step) {
+    const target = step.target || '.';
+    return this.plugins.executeTool('git_add', { path: target, cwd: this.workingDir });
+  }
+
+  async gitCheckout(step) {
+    return this.plugins.executeTool('git_checkout', {
+      branch: step.target,
+      create: step.create || false,
+      cwd: this.workingDir
+    });
   }
 
   async handleStepError(step, error) {

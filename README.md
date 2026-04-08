@@ -37,8 +37,29 @@ At the center sits the **Local Agent** — an autonomous planner that decomposes
 
 ## Features
 
-### Local-First AI Provider Support
-All inference runs on your own hardware. Connect to Ollama, LM Studio, or any OpenAI-compatible local HTTP endpoint (llama.cpp, text-generation-webui, etc.). No API keys, no data egress, no vendor lock-in.
+### Multi-Provider AI Support
+Choose from free cloud providers, bring your own API key, or run models locally:
+
+| Provider | Models | Free Tier | Speed | Best For |
+|---|---|---|---|---|
+| **Qwen (Alibaba Cloud)** | Qwen3-Coder-Next, Qwen3-Max, Qwen-Plus | 2,000 req/day | Fast | Code generation ⭐ |
+| **Groq** | Llama 3 70B, Mixtral, Gemma 2 | Generous free tier | Very Fast | Quick responses |
+| **HuggingFace** | Qwen Coder, Llama 3.1, DeepSeek | Rate limited | Moderate | Model variety |
+| **Ollama** | Any local model | Unlimited | Varies | Offline/private |
+| **LM Studio** | Any local model | Unlimited | Varies | Offline/private |
+
+**Quick Setup:**
+```bash
+tiger-code-pilot setup   # Interactive model selection
+```
+
+**Free Tier Options:**
+- Qwen: Sign up at https://bailian.console.alibabacloud.com/ (2K free requests/day)
+- Groq: Sign up at https://console.groq.com/ (generous free limits)
+- HuggingFace: Get free token at https://huggingface.co/settings/tokens
+
+### Local-First Option
+All inference can run on your own hardware via Ollama or LM Studio — no API keys, no data egress, no vendor lock-in.
 
 ### Vibecode Actions
 Natural-language driven code workflows:
@@ -106,7 +127,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full system design, communicati
 
 - Node.js 18+
 - VS Code 1.90+ (for extension)
-- At least one AI provider configured (API key or local model)
+- API key from a free provider OR local model (Ollama/LM Studio)
 
 ### Install & Run
 
@@ -114,6 +135,33 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full system design, communicati
 npm install
 npm run compile
 ```
+
+### 1. Model Setup (First Time)
+
+Run the interactive onboarding to select your AI model:
+
+```bash
+tiger-code-pilot setup
+```
+
+You'll be guided through:
+- **Option 1:** Quick setup with recommended free models (Qwen, Groq)
+- **Option 2:** Browse all 11 available models
+- **Option 3:** Use your own API key (OpenAI, Anthropic, OpenRouter)
+- **Option 4:** Local models only (Ollama/LM Studio)
+
+**Getting Free API Keys:**
+- **Qwen** (recommended for coding): https://bailian.console.alibabacloud.com/ — 2,000 free requests/day
+- **Groq** (fastest inference): https://console.groq.com/ — generous free limits
+- **HuggingFace** (most models): https://huggingface.co/settings/tokens — rate limited free tier
+
+### 2. Verify Connection
+
+```bash
+tiger-code-pilot test-connection
+```
+
+### 3. Start Coding!
 
 **VS Code** — Press `F5` to launch the Extension Development Host, then use the command palette:
 
@@ -129,9 +177,14 @@ npm run compile
 ```bash
 npm install -g .
 
-tiger-code-pilot config set openai sk-xxx
-tiger-code-pilot analyze src/app.js --mode security
+# Model management
+tiger-code-pilot setup           # Interactive model selection
+tiger-code-pilot models          # List all available models
+tiger-code-pilot stack           # Show multi-provider stack
+
+# Coding commands
 tiger-code-pilot chat
+tiger-code-pilot analyze src/app.js --mode security
 tiger-code-pilot vibecode generate "a REST API in Python" --language python
 tiger-code-pilot vibecode refactor --file src/app.js
 tiger-code-pilot server --port 3000
@@ -148,7 +201,7 @@ tiger-code-mcp
 Or launch as an HTTP REST API:
 
 ```bash
-npm run server
+npm run server:mcp
 # Endpoints: POST /chat, POST /call, GET /tools, GET /health
 ```
 
@@ -271,11 +324,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_COND
 
 | Role | Name |
 |---|---|
-| **Design** | [sonamcgoo-dev](https://github.com/sonamcgoo-dev) |
-| **Development** | Qwen Code (Alibaba) |
-| **Development** | Amazon Q |
-
-Logo and brand identity designed by **sonamcgoo-dev**. Core engineering by **Qwen Code** and **Amazon Q**.
+| **Design & Development** | Black Tiger Computing |
+| **Logo & Brand Identity** | [sonamcgoo-dev](https://github.com/sonamcgoo-dev) |
 
 ---
 

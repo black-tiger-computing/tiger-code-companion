@@ -1,4 +1,6 @@
 import * as axios from 'axios';
+import * as childProcess from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
@@ -83,7 +85,7 @@ const QUICK_START_PRESETS = [
   }
 ];
 
-type Provider = 'ollama' | 'lmstudio' | 'local';
+type Provider = 'qwen' | 'groq' | 'huggingface' | 'ollama' | 'lmstudio' | 'local';
 
 interface CopilotState {
   mode: string;
@@ -144,6 +146,10 @@ function getEndpointUrlForProvider(provider: Provider, endpointUrl?: string): st
     case 'ollama':   return 'http://localhost:11434/api/chat';
     case 'lmstudio': return 'http://localhost:1234/v1/chat/completions';
     case 'local':    return 'http://localhost:8080/v1/chat/completions';
+    case 'qwen':     return 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+    case 'groq':     return 'https://api.groq.com/openai/v1/chat/completions';
+    case 'huggingface': return 'https://api-inference.huggingface.co/models/';
+    default:         return '';
   }
 }
 
@@ -645,10 +651,29 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
     <div>
       <label>Provider</label>
       <select id="provider">
-        <option value="ollama" ${state.provider === 'ollama' ? 'selected' : ''}>Ollama</option>
-        <option value="lmstudio" ${state.provider === 'lmstudio' ? 'selected' : ''}>LM Studio</option>
-        <option value="local" ${state.provider === 'local' ? 'selected' : ''}>Custom Local Server</option>
+        <option value="qwen" ${state.provider === 'qwen' ? 'selected' : ''}>⭐ Qwen (Free 2K/day)</option>
+        <option value="groq" ${state.provider === 'groq' ? 'selected' : ''}>⚡ Groq (Free Llama)</option>
+        <option value="huggingface" ${state.provider === 'huggingface' ? 'selected' : ''}>🤗 HuggingFace (Free Tier)</option>
+        <option value="ollama" ${state.provider === 'ollama' ? 'selected' : ''}>🏠 Ollama (Local)</option>
+        <option value="lmstudio" ${state.provider === 'lmstudio' ? 'selected' : ''}>🏠 LM Studio (Local)</option>
+        <option value="local" ${state.provider === 'local' ? 'selected' : ''}>🏠 Custom Local Server</option>
       </select>
+    </div>
+  </div>
+
+  <div id="providerStatus" style="margin-top: 10px; padding: 8px; background: var(--vscode-editor-background); border-radius: 4px; font-size: 12px;">
+    <span id="statusIcon">⏳</span> <span id="statusText">Checking provider status...</span>
+  </div>
+
+  <div class="storage-section">
+    <label>API Key (for cloud providers)</label>
+    <input type="password" id="apiKey" placeholder="Enter API key or set environment variable" value="" />
+    <div class="status">
+      Qwen: DASHSCOPE_API_KEY | Groq: GROQ_API_KEY | HuggingFace: HF_TOKEN
+    </div>
+    <div class="row" style="margin-top: 8px;">
+      <button id="testConnection" class="secondary">🔌 Test Connection</button>
+      <button id="saveApiKey" class="secondary">💾 Save API Key</button>
     </div>
   </div>
 
@@ -669,6 +694,19 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
       ${QUICK_START_PRESETS.map(p => `<option value="${p.id}" data-prompt="${p.prompt.replace(/"/g, '&quot;')}">${p.name}</option>`).join('')}
     </select>
     <div class="status">Select a template to auto-fill the prompt with a structured request</div>
+  </div>
+
+  <div class="storage-section">
+    <label>⚡ Quick Actions (auto-loads editor code)</label>
+    <div class="row" style="flex-wrap: wrap;">
+      <button id="quickAnalyze" class="secondary" style="flex:1; min-width: 80px; margin: 2px;">🔍 Analyze</button>
+      <button id="quickExplain" class="secondary" style="flex:1; min-width: 80px; margin: 2px;">💡 Explain</button>
+      <button id="quickRefactor" class="secondary" style="flex:1; min-width: 80px; margin: 2px;">♻️ Refactor</button>
+      <button id="quickTests" class="secondary" style="flex:1; min-width: 80px; margin: 2px;">🧪 Tests</button>
+      <button id="quickDebug" class="secondary" style="flex:1; min-width: 80px; margin: 2px;">🐛 Debug</button>
+      <button id="quickOptimize" class="secondary" style="flex:1; min-width: 80px; margin: 2px;">⚡ Optimize</button>
+    </div>
+    <div class="status">Click to load code from editor and run the action</div>
   </div>
 
   <div class="storage-section">
@@ -764,6 +802,27 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
       vscode.postMessage({ type: 'loadFromEditor' });
     });
 
+    // Quick Action buttons — auto-load editor code + run action
+    const quickActionMap = [
+      { btnId: 'quickAnalyze',    promptPrefix: 'Analyze this code for quality, bugs, and improvements:' },
+      { btnId: 'quickExplain',    promptPrefix: 'Explain what this code does in simple terms:' },
+      { btnId: 'quickRefactor',   promptPrefix: 'Refactor this code to be cleaner and more maintainable:' },
+      { btnId: 'quickTests',      promptPrefix: 'Write comprehensive unit tests for this code:' },
+      { btnId: 'quickDebug',      promptPrefix: 'Find and fix all bugs in this code:' },
+      { btnId: 'quickOptimize',   promptPrefix: 'Optimize this code for performance:' }
+    ];
+
+    for (const action of quickActionMap) {
+      const btn = document.getElementById(action.btnId);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          // Request code from editor, then auto-run after it loads
+          window._pendingQuickAction = action;
+          vscode.postMessage({ type: 'loadFromEditor' });
+        });
+      }
+    }
+
     // Save file
     document.getElementById('saveFile').addEventListener('click', () => {
       const code = document.getElementById('codeInput').value;
@@ -786,12 +845,30 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
     document.getElementById('provider').addEventListener('change', (e) => {
       currentProvider = e.target.value;
       const endpoints = {
-        openai: 'https://api.openai.com/v1/chat/completions',
+        qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+        groq: 'https://api.groq.com/openai/v1/chat/completions',
         huggingface: 'https://api-inference.huggingface.co/models/',
-        ollama: 'http://localhost:11434/api/generate',
+        ollama: 'http://localhost:11434/api/chat',
+        lmstudio: 'http://localhost:1234/v1/chat/completions',
         local: 'http://localhost:8080/v1/chat/completions'
       };
-      document.getElementById('endpointUrl').placeholder = endpoints[currentProvider];
+      document.getElementById('endpointUrl').placeholder = endpoints[currentProvider] || '';
+
+      // Update provider status
+      updateProviderStatus(currentProvider);
+    });
+
+    // Test connection
+    document.getElementById('testConnection').addEventListener('click', () => {
+      vscode.postMessage({ type: 'testConnection', payload: { provider: currentProvider } });
+    });
+
+    // Save API key
+    document.getElementById('saveApiKey').addEventListener('click', () => {
+      const apiKey = document.getElementById('apiKey').value;
+      if (apiKey) {
+        vscode.postMessage({ type: 'saveApiKey', payload: { provider: currentProvider, apiKey } });
+      }
     });
 
     // Track API key modification
@@ -819,12 +896,64 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
 
     // Handle messages from extension
     window.addEventListener('message', event => {
-      if (event.data.type === 'result') {
+      if (event.data.type === 'response') {
+        // Streaming: append chunks to output (not replace)
+        const out = document.getElementById('out');
+        out.textContent = (out.textContent === 'Results will appear here...' ? '' : out.textContent) + event.data.payload;
+      } else if (event.data.type === 'result') {
         document.getElementById('out').textContent = event.data.payload;
       } else if (event.data.type === 'fileContent') {
         document.getElementById('codeInput').value = event.data.payload.content;
+        // If a quick action was pending, auto-run it
+        if (window._pendingQuickAction) {
+          const action = window._pendingQuickAction;
+          document.getElementById('prompt').value = action.promptPrefix;
+          window._pendingQuickAction = null;
+          // Auto-trigger the run
+          setTimeout(() => {
+            document.getElementById('run').click();
+          }, 300);
+        }
+      } else if (event.data.type === 'providerStatus') {
+        // Update provider status indicator
+        const status = event.data.payload;
+        const icon = document.getElementById('statusIcon');
+        const text = document.getElementById('statusText');
+        if (icon && text) {
+          icon.textContent = status.icon;
+          text.textContent = status.text;
+          document.getElementById('providerStatus').style.borderLeft = '4px solid ' + status.color;
+        }
+      } else if (event.data.type === 'connectionTest') {
+        const result = event.data.payload;
+        alert(result.success ? '✅ Connection successful!' : '❌ Connection failed: ' + result.error);
       }
     });
+
+    // Update provider status on change
+    function updateProviderStatus(provider) {
+      const statusEl = document.getElementById('providerStatus');
+      const iconEl = document.getElementById('statusIcon');
+      const textEl = document.getElementById('statusText');
+
+      if (!statusEl || !iconEl || !textEl) return;
+
+      const cloudProviders = ['qwen', 'groq', 'huggingface'];
+      const isCloud = cloudProviders.includes(provider);
+
+      if (isCloud) {
+        iconEl.textContent = '🔑';
+        textEl.textContent = provider.toUpperCase() + ' - Enter API key above or set environment variable';
+        statusEl.style.borderLeft = '4px solid var(--vscode-inputValidation-warningBackground)';
+      } else {
+        iconEl.textContent = '🏠';
+        textEl.textContent = provider + ' - Make sure local server is running';
+        statusEl.style.borderLeft = '4px solid var(--vscode-charts-green)';
+      }
+    }
+
+    // Initialize provider status on load
+    updateProviderStatus(currentProvider);
   </script>
 </body>
 </html>`;
@@ -834,7 +963,139 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
 let _chatPanel: vscode.WebviewPanel | undefined;
 let _progressPanel: vscode.WebviewPanel | undefined;
 
+/**
+ * Broadcast a progress event to the progress dashboard panel (if open).
+ */
+function sendProgress(event: { type: string; [key: string]: unknown }) {
+  if (_progressPanel) {
+    _progressPanel.webview.postMessage(event);
+  }
+}
+
+/**
+ * Broadcast a step status change to the progress dashboard.
+ */
+function sendStepUpdate(stepTitle: string, status: 'active' | 'completed' | 'error', details = '') {
+  sendProgress({ type: 'progress-step', step: stepTitle, status, details });
+}
+
+/**
+ * Run the local agent with a goal, broadcasting progress to the dashboard.
+ */
+async function runLocalAgent(goal: string, _context: vscode.ExtensionContext): Promise<void> {
+  // Show progress panel if not already open
+  vscode.commands.executeCommand('codePilot.agentProgress');
+
+  // Give the panel a moment to initialize
+  await new Promise(r => setTimeout(r, 500));
+
+  // Resolve agent path — handle both dev (src/) and compiled (dist/) paths
+  const agentPathDev = path.join(__dirname, '..', 'src', 'local-agent.js');
+  const agentPathDist = path.join(__dirname, 'local-agent.js');
+  const agentPath = fs.existsSync(agentPathDist) ? agentPathDist : agentPathDev;
+
+  if (!fs.existsSync(agentPath)) {
+    vscode.window.showErrorMessage('Local agent not found — ensure the project is built');
+    return;
+  }
+
+  const agent = childProcess.spawn('node', [agentPath, '--goal', goal], {
+    cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd(),
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+
+  // Parse stderr for progress (agent writes structured output there)
+  let outputBuffer = '';
+  agent.stderr.on('data', (chunk: Buffer) => {
+    const text = chunk.toString();
+    outputBuffer += text;
+
+    // Try to parse structured progress events
+    const lines = outputBuffer.split('\n');
+    outputBuffer = lines.pop() || ''; // keep incomplete line in buffer
+
+    for (const line of lines) {
+      try {
+        const evt = JSON.parse(line);
+        if (evt.step && evt.status) {
+          sendStepUpdate(evt.step, evt.status, evt.details || '');
+        }
+      } catch {
+        // Not JSON — ignore
+      }
+    }
+  });
+
+  agent.on('close', (code: number | null) => {
+    if (code === 0) {
+      sendProgress({ type: 'progress-done' });
+    } else {
+      sendProgress({ type: 'progress-step', step: 'Agent', status: 'error', details: `Exit code: ${code}` });
+    }
+  });
+
+  agent.on('error', (err: Error) => {
+    sendProgress({ type: 'progress-step', step: 'Agent', status: 'error', details: err.message });
+  });
+}
+
+// ── Auto-start MCP Server ──────────────────────────────────────────────
+
+const MCP_SERVER_PORT = 3097;
+
+async function startMcpServerIfNeeded(_context: vscode.ExtensionContext): Promise<void> {
+  try {
+    // Check if server is already running
+    const healthUrl = `http://localhost:${MCP_SERVER_PORT}/health`;
+    const response = await axios.default.get(healthUrl, { timeout: 2000 });
+    if (response.data?.status === 'ok') {
+      // Server already running
+      return;
+    }
+  } catch {
+    // Server not running — start it
+  }
+
+  try {
+    // Spawn MCP server as detached process
+    // Handle both dev (src/) and compiled (dist/) paths
+    const serverPath = path.join(__dirname, 'mcp-server.js');
+    const fallbackPath = path.join(__dirname, '..', 'src', 'mcp-server.js');
+    const fs = require('fs');
+    const actualPath = fs.existsSync(serverPath) ? serverPath : fallbackPath;
+
+    if (!fs.existsSync(actualPath)) {
+      console.error('MCP server not found — skipping auto-start');
+      return;
+    }
+
+    const child = childProcess.spawn('node', [actualPath, '--http', String(MCP_SERVER_PORT)], {
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+
+    // Wait for server to become healthy (up to 15 seconds)
+    let attempts = 0;
+    while (attempts < 30) {
+      await new Promise(r => setTimeout(r, 500));
+      try {
+        const resp = await axios.default.get(`http://localhost:${MCP_SERVER_PORT}/health`, { timeout: 2000 });
+        if (resp.data?.status === 'ok') break;
+      } catch { /* not ready yet */ }
+      attempts++;
+    }
+  } catch (e) {
+    // Non-fatal — extension still works with direct core-engine calls
+    console.error('Failed to auto-start MCP server:', e);
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
+  // ── Auto-start MCP server on extension launch ─────────────────────────
+  // Check if server is running; spawn if not
+  startMcpServerIfNeeded(context);
+
   // Register onboarding command
   const onboardingDisposable = vscode.commands.registerCommand('codePilot.onboarding', () => {
     showOnboarding(context);
@@ -937,7 +1198,8 @@ function openCopilotPanel(context: vscode.ExtensionContext, state: CopilotState)
           state.codeInput = payload.codeInput;
           state.endpointUrl = payload.endpointUrl || getEndpointUrlForProvider(state.provider);
 
-          // Wire to Core Engine (stub — will be replaced by backend team)
+          // Wire to Core Engine — handles AI routing, provider switching, streaming
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { getCoreEngine } = require('./core-engine');
           const engine = getCoreEngine();
           engine.setApiKey(state.apiKey);
@@ -1043,6 +1305,7 @@ function openProgressPanel(context: vscode.ExtensionContext) {
   });
 
   // Read the progress dashboard HTML
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const fs = require('fs');
   const dashboardPath = path.join(context.extensionPath, 'src', 'ui', 'progress-dashboard.html');
   const html = fs.existsSync(dashboardPath)
@@ -1052,7 +1315,8 @@ function openProgressPanel(context: vscode.ExtensionContext) {
   panel.webview.html = html;
 }
 
-async function callCopilot(state: CopilotState): Promise<string> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _callCopilot(state: CopilotState): Promise<string> {
   const model = state.preset || state.model;
 
   if (!state.prompt) {

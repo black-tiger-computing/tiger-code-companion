@@ -190,7 +190,7 @@ class CLIVisuals {
     console.log(`${COLORS.dim}${'─'.repeat(colWidths.reduce((a, b) => a + b, 0))}${COLORS.reset}`);
 
     // Print rows
-    rows.forEach((row, idx) => {
+    rows.forEach((row) => {
       const rowLine = row.map((cell, i) =>
         `${COLORS.white}${String(cell || '').padEnd(colWidths[i])}${COLORS.reset}`
       ).join('');

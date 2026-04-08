@@ -1,7 +1,6 @@
-# Tiger Code Pilot — Backend Spec for Amazon Q
+# Tiger Code Pilot — Backend Spec
 
 > This document is the source of truth for the backend piece.
-> Qwen Code owns the frontend. Amazon Q owns everything in this doc.
 
 ---
 
@@ -301,7 +300,7 @@ async function ensureServerRunning(): Promise<number> {
 
 ## 7. Core Engine — Real Implementation
 
-The current `src/core-engine.js` is a Qwen-built stub. Q should replace it with the real implementation:
+The current `src/core-engine.js` should be replaced with the real implementation:
 
 ### Required Methods (locked signatures)
 
@@ -404,9 +403,9 @@ src/
 ```
 
 ### What Already Exists (Don't Touch)
-- `src/extension.ts` — Qwen's VS Code extension
-- `src/ui/*` — Qwen's UI files
-- `src/cli.js` — Qwen's CLI (will be updated to route through MCP server later)
+- `src/extension.ts` — VS Code extension
+- `src/ui/*` — UI files
+- `src/cli.js` — CLI
 - `images/*` — Logo assets
 
 ---
@@ -439,17 +438,31 @@ The backend is "done" when:
 4. ✅ `POST /chat/stream` streams responses via SSE
 5. ✅ Tool layer can read/write files, run safe commands
 6. ✅ Autonomy levels enforced (auto/ask/confirm)
-7. ✅ Natural language CLI routes through MCP server
+7. ✅ Natural language CLI routes through MCP server (with graceful fallback)
 8. ✅ VS Code extension connects to server instead of direct axios
 9. ✅ Multiple clients can connect simultaneously
+10. ✅ Session-pinned model routing works (per-conversation model locking)
+11. ✅ Streaming graceful degradation (tries all providers before non-streaming fallback)
+12. ✅ Path resolution works for both dev (`src/`) and compiled (`dist/`) layouts
 
 ---
 
-## Questions for Q
+## 11. Hardening Notes (Post-Implementation)
+
+- `_callAIStream()` now tries the full FALLBACK_CHAIN before falling back to non-streaming `_callAI()`
+- `ensureServerRunning()` handles spawn failures, orphaned processes, missing files with clear errors
+- `autonomy.check()` safely handles callback failures (defaults to deny on error)
+- CLI config path bug fixed: was `.tiger-code-pilot/.tiger-code-pilot/config.json` (double nested)
+- Extension auto-start resolves both `dist/mcp-server.js` and `../src/mcp-server.js`
+- Local agent resolves both `dist/local-agent.js` and `../src/local-agent.js`
+
+---
+
+## Notes
 
 If anything here is unclear or you need more context:
 
-1. The frontend piece (Qwen's work) is documented in `FRONTEND_PIECE.md` — read it for the API contract
+1. The frontend piece is documented in `FRONTEND_PIECE.md` — read it for the API contract
 2. The full architecture is in `ARCHITECTURE.md`
 3. The current MCP server at `src/mcp-server.js` already has the tool definitions and JSON-RPC handler — extend it, don't rewrite it
 4. The core engine stub at `src/core-engine.js` has the method signatures locked — match those exactly

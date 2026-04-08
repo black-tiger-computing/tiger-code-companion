@@ -62,15 +62,37 @@ const shellPlugin = {
         const { exec } = require('child_process');
         const { promisify } = require('util');
         const execAsync = promisify(exec);
-        const ALLOWED = new Set(['ls','dir','cat','type','echo','pwd','npm','npx','node','git','pip','python','python3','grep','find','head','tail','wc','sort','jest','mocha','vitest','tsc','eslint']);
-        const DANGEROUS = [/rm\s+-rf/i, /del\s+\/[sf]/i, /sudo/i, /chmod\s+777/i];
+
+        // Allowlist of safe commands
+        const ALLOWED = new Set([
+          'ls', 'dir', 'cat', 'type', 'echo', 'pwd', 'npm', 'npx', 'node',
+          'git', 'pip', 'python', 'python3', 'grep', 'find', 'head', 'tail',
+          'wc', 'sort', 'jest', 'mocha', 'vitest', 'tsc', 'eslint', 'cargo',
+          'go', 'rustc', 'javac', 'java', 'mvn', 'gradle', 'docker', 'docker-compose',
+          'curl', 'wget', 'ssh', 'scp', 'ping', 'ps', 'kill', 'mkdir', 'cp', 'mv'
+        ]);
+
+        // Dangerous patterns to block
+        const DANGEROUS = [
+          /rm\s+-rf\s+\//i,                    // rm -rf /
+          /rm\s+-rf\s+\$HOME/i,               // rm -rf $HOME
+          /del\s+\/[sf]/i,                     // Windows destructive delete
+          /sudo/i,                             // privilege escalation
+          /mkfs/i,                             // filesystem destruction
+          /format\s+[c-z]:/i                  // Windows format
+        ];
+
         const base = args.command.split(/\s+/)[0].toLowerCase();
-        if (!ALLOWED.has(base)) return `Command not allowed: "${base}"`;
+        if (!ALLOWED.has(base)) return `Command not allowed: "${base}". Use allowed commands only.`;
         for (const p of DANGEROUS) { if (p.test(args.command)) return 'Command blocked: dangerous pattern'; }
         try {
-          const { stdout, stderr } = await execAsync(args.command, { cwd: args.cwd || process.cwd(), timeout: 60000 });
-          return stderr ? `stdout:\n${stdout}\nstderr:\n${stderr}` : stdout;
-        } catch (e) { return `Command failed: ${e.message}`; }
+          const { stdout, stderr } = await execAsync(args.command, {
+            cwd: args.cwd || process.cwd(),
+            timeout: 120000, // 2 minute timeout
+            maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+          });
+          return stderr ? `stdout:\n${stdout}\n\nstderr:\n${stderr}` : stdout;
+        } catch (e) { return `Command failed: ${e.message}${e.stdout ? `\nstdout: ${e.stdout}` : ''}${e.stderr ? `\nstderr: ${e.stderr}` : ''}`; }
       }
     }
   ]
@@ -90,6 +112,116 @@ const gitPlugin = {
           const { stdout } = await promisify(exec)('git status --short', { cwd: args.cwd || process.cwd() });
           return stdout || 'Working tree clean';
         } catch (e) { return `Not a git repo: ${e.message}`; }
+      }
+    },
+    {
+      name: 'git_log', description: 'Show git log',
+      parameters: {
+        type: 'object',
+        properties: {
+          cwd: { type: 'string' },
+          count: { type: 'number', description: 'Number of commits to show' }
+        }
+      },
+      handler: async (args) => {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        try {
+          const count = args.count || 10;
+          const { stdout } = await promisify(exec)(`git log --oneline -${count}`, { cwd: args.cwd || process.cwd() });
+          return stdout || 'No commits found';
+        } catch (e) { return `Not a git repo: ${e.message}`; }
+      }
+    },
+    {
+      name: 'git_diff', description: 'Show git diff of unstaged changes',
+      parameters: { type: 'object', properties: { cwd: { type: 'string' }, file: { type: 'string' } } },
+      handler: async (args) => {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        try {
+          const fileArg = args.file ? ` -- ${args.file}` : '';
+          const { stdout } = await promisify(exec)(`git diff${fileArg}`, { cwd: args.cwd || process.cwd() });
+          return stdout || 'No unstaged changes';
+        } catch (e) { return `Not a git repo: ${e.message}`; }
+      }
+    },
+    {
+      name: 'git_branch', description: 'List git branches',
+      parameters: {
+        type: 'object',
+        properties: {
+          cwd: { type: 'string' },
+          remote: { type: 'boolean', description: 'Show remote branches' }
+        }
+      },
+      handler: async (args) => {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        try {
+          const cmd = args.remote ? 'git branch -a' : 'git branch';
+          const { stdout } = await promisify(exec)(cmd, { cwd: args.cwd || process.cwd() });
+          return stdout || 'No branches found';
+        } catch (e) { return `Not a git repo: ${e.message}`; }
+      }
+    },
+    {
+      name: 'git_commit', description: 'Commit staged changes with a message',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Commit message' },
+          cwd: { type: 'string' }
+        },
+        required: ['message']
+      },
+      handler: async (args) => {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        try {
+          const { stdout } = await promisify(exec)(`git commit -m "${args.message.replace(/"/g, '\\"')}"`, { cwd: args.cwd || process.cwd() });
+          return stdout || 'Committed successfully';
+        } catch (e) { return `Commit failed: ${e.message}`; }
+      }
+    },
+    {
+      name: 'git_add', description: 'Stage files for commit',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File or directory to stage (use "." for all)' },
+          cwd: { type: 'string' }
+        },
+        required: ['path']
+      },
+      handler: async (args) => {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        try {
+          const { stdout } = await promisify(exec)(`git add ${args.path}`, { cwd: args.cwd || process.cwd() });
+          return stdout || `Staged: ${args.path}`;
+        } catch (e) { return `Git add failed: ${e.message}`; }
+      }
+    },
+    {
+      name: 'git_checkout', description: 'Create or switch branches',
+      parameters: {
+        type: 'object',
+        properties: {
+          branch: { type: 'string', description: 'Branch name' },
+          create: { type: 'boolean', description: 'Create new branch' },
+          cwd: { type: 'string' }
+        },
+        required: ['branch']
+      },
+      handler: async (args) => {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        try {
+          const cmd = args.create ? `git checkout -b ${args.branch}` : `git checkout ${args.branch}`;
+          const { stdout } = await promisify(exec)(cmd, { cwd: args.cwd || process.cwd() });
+          return stdout || `Switched to ${args.branch}`;
+        } catch (e) { return `Git checkout failed: ${e.message}`; }
       }
     }
   ]

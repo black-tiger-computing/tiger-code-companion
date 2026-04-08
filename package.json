@@ -28,9 +28,10 @@
         "watch": "tsc -p ./ --watch",
         "pretest": "npm run compile",
         "test": "node src/test/backend.test.js",
-        "lint": "eslint . --ext .ts,.tsx",
-        "server": "node src/mcp-server.js --http",
-        "server": "node src/cli.js server",
+        "lint": "eslint . --ext .ts,.tsx,.js",
+        "lint:fix": "eslint . --ext .ts,.tsx,.js --fix",
+        "server:mcp": "node src/mcp-server.js --http",
+        "server:cli": "node src/cli.js server",
         "mcp": "node src/mcp-server.js",
         "agent": "node src/local-agent.js",
         "cli": "node src/cli.js"
@@ -71,20 +72,20 @@
         ]
     },
     "name": "tiger-code-pilot",
-    "homepage": "https://github.com/yourname/tiger-code-pilot",
+    "homepage": "https://github.com/tiger-code-pilot/tiger-code-pilot",
     "main": "./dist/extension.js",
     "activationEvents": [
         "onCommand:codePilot.start",
         "onCommand:codePilot.openChat"
     ],
-    "publisher": "your-name",
+    "publisher": "tiger-code-pilot",
     "description": "AI-powered coding assistant with MCP server, CLI, vibecoding, and natural language chat.",
     "bugs": {
-        "url": "https://github.com/yourname/tiger-code-pilot/issues"
+        "url": "https://github.com/tiger-code-pilot/tiger-code-pilot/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/yourname/tiger-code-pilot.git"
+        "url": "https://github.com/tiger-code-pilot/tiger-code-pilot.git"
     },
     "engines": {
         "vscode": "^1.90.0"

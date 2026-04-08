@@ -345,23 +345,68 @@
   </div>
 
   <script>
-    // Real-time progress updates
-    function updateProgress(percent, step) {
-      document.getElementById('progress-percent').textContent = percent + '%';
-      document.getElementById('progress-bar').style.width = percent + '%';
-      document.getElementById('current-step').textContent = step;
+    // State
+    let steps = [];
+    let taskTitle = 'Waiting for task...';
+
+    // Receive messages from extension
+    window.addEventListener('message', event => {
+      const msg = event.data;
+      if (msg.type === 'progress-init') {
+        taskTitle = msg.title || 'Building...';
+        steps = (msg.steps || []).map((s, i) => ({
+          title: s,
+          description: '',
+          status: 'pending',
+          time: 'Pending',
+          order: i + 1
+        }));
+        render();
+      } else if (msg.type === 'progress-step') {
+        const step = steps.find(s => s.title === msg.step);
+        if (step) {
+          step.status = msg.status || 'active';
+          step.description = msg.details || '';
+          step.time = msg.status === 'completed' ? 'Done' : msg.status === 'error' ? 'Failed' : 'Working...';
+        }
+        render();
+      } else if (msg.type === 'progress-done') {
+        steps.forEach(s => { if (s.status !== 'completed') s.status = 'completed'; s.time = 'Done'; });
+        render();
+      }
+    });
+
+    function render() {
+      const total = steps.length;
+      const completed = steps.filter(s => s.status === 'completed').length;
+      const active = steps.findIndex(s => s.status === 'active');
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      document.querySelector('.progress-title').textContent = taskTitle;
+      document.getElementById('progress-percent').textContent = pct + '%';
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('total-steps').textContent = total;
+      document.getElementById('completed-steps').textContent = completed;
+      document.getElementById('current-step').textContent = active >= 0 ? active + 1 : (completed >= total ? total : '—');
+      document.querySelector('.stat-change').textContent = pct >= 100 ? '✓ Complete' : pct > 0 ? `${pct}% complete` : 'Waiting';
+
+      const stepsList = document.querySelector('.steps-list');
+      stepsList.innerHTML = steps.map((s, i) => {
+        const icon = s.status === 'completed' ? '✓' : s.status === 'active' ? '⟳' : (i + 1);
+        const iconClass = s.status === 'completed' ? 'completed' : s.status === 'active' ? 'active' : 'pending';
+        return `<div class="step-item ${s.status}">
+          <div class="step-icon ${iconClass}">${icon}</div>
+          <div class="step-content">
+            <div class="step-title">${s.title}</div>
+            <div class="step-description">${s.description}</div>
+          </div>
+          <div class="step-time">${s.time}</div>
+        </div>`;
+      }).join('');
     }
 
-    // Example: Simulate progress
-    let currentProgress = 58;
-    const interval = setInterval(() => {
-      if (currentProgress < 100) {
-        currentProgress += 1;
-        updateProgress(currentProgress, Math.floor(currentProgress / 10) + 1);
-      } else {
-        clearInterval(interval);
-      }
-    }, 500);
+    // Initial render
+    render();
   </script>
 </body>
 </html>

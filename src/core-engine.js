@@ -9,14 +9,24 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const axios = require('axios');
+// axios reserved for future HTTP request functionality
+// const axios = require('axios');
 
-// Provider modules — local only
+// Usage analytics
+const usageAnalytics = require('./usage-analytics');
+
+// Provider modules — cloud + local
+const qwenProvider = require('./providers/qwen');
+const groqProvider = require('./providers/groq');
+const hfProvider = require('./providers/huggingface');
 const ollamaProvider = require('./providers/ollama');
 const lmstudioProvider = require('./providers/lmstudio');
 const localProvider = require('./providers/local');
 
 const PROVIDER_MODULES = {
+  qwen: qwenProvider,
+  groq: groqProvider,
+  huggingface: hfProvider,
   ollama: ollamaProvider,
   lmstudio: lmstudioProvider,
   local: localProvider
@@ -35,9 +45,12 @@ const DEFAULT_CONFIG = {
 };
 
 const PROVIDER_ENDPOINTS = {
-  ollama:   'http://localhost:11434/api/chat',
-  lmstudio: 'http://localhost:1234/v1/chat/completions',
-  local:    'http://localhost:8080/v1/chat/completions'
+  qwen:       'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+  groq:       'https://api.groq.com/openai/v1/chat/completions',
+  huggingface: 'https://api-inference.huggingface.co/models/',
+  ollama:     'http://localhost:11434/api/chat',
+  lmstudio:   'http://localhost:1234/v1/chat/completions',
+  local:      'http://localhost:8080/v1/chat/completions'
 };
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -129,35 +142,154 @@ async function withRetry(fn, retries = 3, delayMs = 1000) {
 
 // ─── Core AI caller — delegates to local provider modules ─────────────────────
 
+// Fallback chain: Qwen → Groq → HuggingFace → Ollama → LM Studio
+const FALLBACK_CHAIN = ['qwen', 'groq', 'huggingface', 'ollama', 'lmstudio', 'local'];
+
 async function _callAI(messages, options = {}) {
   const config = loadConfig();
-  const provider = options.provider || config.provider;
-  const endpointUrl = options.endpointUrl || config.endpointUrl || PROVIDER_ENDPOINTS[provider];
+  const primaryProvider = options.provider || config.provider;
+  const _endpointUrl = options.endpointUrl || config.endpointUrl || PROVIDER_ENDPOINTS[primaryProvider];
   const model = options.model || config.model;
   const temperature = options.temperature ?? config.settings?.temperature ?? 0.7;
   const maxTokens = options.maxTokens ?? config.settings?.maxTokens ?? 4096;
 
-  const mod = PROVIDER_MODULES[provider];
-  if (mod && mod.callOllama) return await withRetry(() => mod.callOllama(messages, { model, temperature, maxTokens }));
-  if (mod && mod.callLMStudio) return await withRetry(() => mod.callLMStudio(messages, { model, temperature, maxTokens }));
-  if (mod && mod.callLocal) return await withRetry(() => mod.callLocal(messages, { model, temperature, maxTokens, endpoint: endpointUrl }));
-  throw new Error(`Unsupported provider: "${provider}". Use ollama, lmstudio, or local.`);
+  // Try primary provider first, then fallback
+  const providersToTry = [primaryProvider, ...FALLBACK_CHAIN.filter(p => p !== primaryProvider)];
+  let lastError = null;
+
+  for (const provider of providersToTry) {
+    const apiKey = config.apiKeys?.[provider] || null;
+    const mod = PROVIDER_MODULES[provider];
+
+    if (!mod) continue; // Skip unsupported providers
+
+    try {
+      // Cloud providers with API key support
+      if (provider === 'qwen') {
+        const startTime = Date.now();
+        const result = await withRetry(() => mod.callQwen(messages, { model, temperature, maxTokens, apiKey, endpoint: PROVIDER_ENDPOINTS[provider] }));
+        const responseTime = Date.now() - startTime;
+        // Estimate tokens (rough: ~4 chars per token)
+        const promptTokens = JSON.stringify(messages).length / 4;
+        const completionTokens = result.length / 4;
+        usageAnalytics.trackAPICall(provider, model, promptTokens, completionTokens, responseTime, true);
+        return result;
+      }
+      if (provider === 'groq') {
+        const startTime = Date.now();
+        const result = await withRetry(() => mod.callGroq(messages, { model, temperature, maxTokens, apiKey, endpoint: PROVIDER_ENDPOINTS[provider] }));
+        const responseTime = Date.now() - startTime;
+        const promptTokens = JSON.stringify(messages).length / 4;
+        const completionTokens = result.length / 4;
+        usageAnalytics.trackAPICall(provider, model, promptTokens, completionTokens, responseTime, true);
+        return result;
+      }
+      if (provider === 'huggingface') {
+        const startTime = Date.now();
+        const result = await withRetry(() => mod.callHuggingFace(messages, { model, temperature, maxTokens, apiKey }));
+        const responseTime = Date.now() - startTime;
+        const promptTokens = JSON.stringify(messages).length / 4;
+        const completionTokens = result.length / 4;
+        usageAnalytics.trackAPICall(provider, model, promptTokens, completionTokens, responseTime, true);
+        return result;
+      }
+
+      // Local providers (free, no cost tracking)
+      if (mod.callOllama) {
+        const startTime = Date.now();
+        const result = await withRetry(() => mod.callOllama(messages, { model, temperature, maxTokens }));
+        const responseTime = Date.now() - startTime;
+        const promptTokens = JSON.stringify(messages).length / 4;
+        const completionTokens = result.length / 4;
+        usageAnalytics.trackAPICall(provider, model, promptTokens, completionTokens, responseTime, true);
+        return result;
+      }
+      if (mod.callLMStudio) {
+        const startTime = Date.now();
+        const result = await withRetry(() => mod.callLMStudio(messages, { model, temperature, maxTokens }));
+        const responseTime = Date.now() - startTime;
+        const promptTokens = JSON.stringify(messages).length / 4;
+        const completionTokens = result.length / 4;
+        usageAnalytics.trackAPICall(provider, model, promptTokens, completionTokens, responseTime, true);
+        return result;
+      }
+      if (mod.callLocal) {
+        const startTime = Date.now();
+        const result = await withRetry(() => mod.callLocal(messages, { model, temperature, maxTokens, endpoint: PROVIDER_ENDPOINTS[provider] }));
+        const responseTime = Date.now() - startTime;
+        const promptTokens = JSON.stringify(messages).length / 4;
+        const completionTokens = result.length / 4;
+        usageAnalytics.trackAPICall(provider, model, promptTokens, completionTokens, responseTime, true);
+        return result;
+      }
+
+    } catch (e) {
+      lastError = e;
+      console.warn(`Provider "${provider}" failed: ${e.message}. Trying next provider in fallback chain...`);
+      // Continue to next provider in chain
+    }
+  }
+
+  // All providers failed
+  throw new Error(`All AI providers failed. Last error: ${lastError?.message || 'Unknown error'}`);
 }
 
 // ─── Streaming ────────────────────────────────────────────────────────────────
 
 async function _callAIStream(messages, onChunk, options = {}) {
   const config = loadConfig();
-  const provider = options.provider || config.provider;
-  const endpointUrl = options.endpointUrl || config.endpointUrl || PROVIDER_ENDPOINTS[provider];
+  const primaryProvider = options.provider || config.provider;
+  const endpointUrl = options.endpointUrl || config.endpointUrl || PROVIDER_ENDPOINTS[primaryProvider];
   const model = options.model || config.model;
   const temperature = options.temperature ?? 0.7;
+  const apiKey = config.apiKeys?.[primaryProvider] || null;
 
-  const mod = PROVIDER_MODULES[provider];
-  if (mod && mod.callOllamaStream) { await mod.callOllamaStream(messages, onChunk, { model, temperature }); return; }
-  if (mod && mod.callLMStudioStream) { await mod.callLMStudioStream(messages, onChunk, { model, temperature }); return; }
-  if (mod && mod.callLocalStream) { await mod.callLocalStream(messages, onChunk, { model, temperature, endpoint: endpointUrl }); return; }
-  throw new Error(`Unsupported provider: "${provider}". Use ollama, lmstudio, or local.`);
+  // Try primary provider first
+  let mod = PROVIDER_MODULES[primaryProvider];
+
+  // If primary doesn't support streaming, try fallback providers that do
+  if (mod) {
+    if (primaryProvider === 'qwen' && mod.callQwenStream) {
+      await mod.callQwenStream(messages, onChunk, { model, temperature, apiKey, endpoint: endpointUrl });
+      return;
+    }
+    if (primaryProvider === 'groq' && mod.callGroqStream) {
+      await mod.callGroqStream(messages, onChunk, { model, temperature, apiKey, endpoint: endpointUrl });
+      return;
+    }
+    if (primaryProvider === 'huggingface' && mod.callHuggingFaceStream) {
+      await mod.callHuggingFaceStream(messages, onChunk, { model, temperature, apiKey });
+      return;
+    }
+    if (mod.callOllamaStream) { await mod.callOllamaStream(messages, onChunk, { model, temperature }); return; }
+    if (mod.callLMStudioStream) { await mod.callLMStudioStream(messages, onChunk, { model, temperature }); return; }
+    if (mod.callLocalStream) { await mod.callLocalStream(messages, onChunk, { model, temperature, endpoint: endpointUrl }); return; }
+  }
+
+  // Primary provider doesn't support streaming — try fallback chain
+  for (const fallbackProvider of FALLBACK_CHAIN) {
+    if (fallbackProvider === primaryProvider) continue;
+    const fallbackMod = PROVIDER_MODULES[fallbackProvider];
+    if (!fallbackMod) continue;
+
+    const fallbackApiKey = config.apiKeys?.[fallbackProvider] || null;
+
+    if (fallbackProvider === 'qwen' && fallbackMod.callQwenStream) {
+      await fallbackMod.callQwenStream(messages, onChunk, { model, temperature, apiKey: fallbackApiKey, endpoint: PROVIDER_ENDPOINTS[fallbackProvider] });
+      return;
+    }
+    if (fallbackProvider === 'groq' && fallbackMod.callGroqStream) {
+      await fallbackMod.callGroqStream(messages, onChunk, { model, temperature, apiKey: fallbackApiKey, endpoint: PROVIDER_ENDPOINTS[fallbackProvider] });
+      return;
+    }
+    if (fallbackMod.callOllamaStream) { await fallbackMod.callOllamaStream(messages, onChunk, { model, temperature }); return; }
+    if (fallbackMod.callLMStudioStream) { await fallbackMod.callLMStudioStream(messages, onChunk, { model, temperature }); return; }
+    if (fallbackMod.callLocalStream) { await fallbackMod.callLocalStream(messages, onChunk, { model, temperature, endpoint: PROVIDER_ENDPOINTS[fallbackProvider] }); return; }
+  }
+
+  // No streaming support anywhere — fall back to non-streaming call
+  const fullResponse = await _callAI(messages, { provider: primaryProvider, model, temperature });
+  onChunk(fullResponse);
 }
 
 // ─── Provider Health ──────────────────────────────────────────────────────────
@@ -168,8 +300,17 @@ async function checkProviderHealth(provider) {
   if (_healthCache[provider] && now - _healthCache[provider].ts < 60000) return _healthCache[provider].ok;
   let ok = false;
   try {
+    const config = loadConfig();
+    const apiKey = config.apiKeys?.[provider] || null;
     const mod = PROVIDER_MODULES[provider];
-    if (mod && mod.checkHealth) ok = await mod.checkHealth();
+    if (mod && mod.checkHealth) {
+      // Cloud providers need API key for health check
+      if (['qwen', 'groq', 'huggingface'].includes(provider)) {
+        ok = await mod.checkHealth(apiKey);
+      } else {
+        ok = await mod.checkHealth();
+      }
+    }
   } catch (e) { ok = false; }
   _healthCache[provider] = { ok, ts: now };
   return ok;
@@ -184,12 +325,28 @@ class CoreEngine {
   async chat(message, sessionId = 'default') {
     this.config = loadConfig();
     const history = getSessionHistory(sessionId);
+
+    // Resolve pinned model from session tracker
+    let providerOverride = null;
+    let modelOverride = null;
+    try {
+      const { resolveModel } = require('./session-tracker');
+      const pinned = resolveModel(sessionId, {});
+      if (pinned && pinned.provider !== 'default') {
+        providerOverride = pinned.provider;
+        modelOverride = pinned.model;
+      }
+    } catch (e) { /* session-tracker not available — use global config */ }
+
     const messages = [
       { role: 'system', content: 'You are Tiger Code Pilot, an expert AI coding assistant. Be helpful, provide complete code examples, and explain your reasoning.' },
       ...history.map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: message }
     ];
-    const response = await _callAI(messages);
+    const response = await _callAI(messages, {
+      provider: providerOverride || undefined,
+      model: modelOverride || undefined
+    });
     addToHistory('user', message, sessionId);
     addToHistory('assistant', response, sessionId);
     return response;
@@ -198,13 +355,29 @@ class CoreEngine {
   async chatStream(message, sessionId = 'default', onChunk) {
     this.config = loadConfig();
     const history = getSessionHistory(sessionId);
+
+    // Resolve pinned model from session tracker
+    let providerOverride = null;
+    let modelOverride = null;
+    try {
+      const { resolveModel } = require('./session-tracker');
+      const pinned = resolveModel(sessionId, {});
+      if (pinned && pinned.provider !== 'default') {
+        providerOverride = pinned.provider;
+        modelOverride = pinned.model;
+      }
+    } catch (e) { /* session-tracker not available — use global config */ }
+
     const messages = [
       { role: 'system', content: 'You are Tiger Code Pilot, an expert AI coding assistant.' },
       ...history.map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: message }
     ];
     let full = '';
-    await _callAIStream(messages, chunk => { full += chunk; onChunk(chunk); });
+    await _callAIStream(messages, chunk => { full += chunk; onChunk(chunk); }, {
+      provider: providerOverride || undefined,
+      model: modelOverride || undefined
+    });
     addToHistory('user', message, sessionId);
     addToHistory('assistant', full, sessionId);
   }
@@ -262,4 +435,4 @@ class CoreEngine {
 let _instance = null;
 function getCoreEngine() { if (!_instance) _instance = new CoreEngine(); return _instance; }
 
-module.exports = { getCoreEngine, CoreEngine, PROVIDER_ENDPOINTS, loadConfig, saveConfig, repairConfig };
+module.exports = { getCoreEngine, CoreEngine, PROVIDER_ENDPOINTS, loadConfig, saveConfig, repairConfig, checkProviderHealth };

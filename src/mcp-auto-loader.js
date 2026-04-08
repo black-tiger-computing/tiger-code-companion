@@ -16,11 +16,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+// os, http not currently used - reserved for future features
+// const os = require('os');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const https = require('https');
-const http = require('http');
+// const http = require('http');
 const { getPluginSystem } = require('./plugin-system');
 const mcpRegistry = require('./mcp-registry');
 
@@ -197,7 +198,7 @@ async function extractToolsFromServer(serverDir, entryPoint) {
       },
       required: ['tool']
     },
-    handler: async (args) => {
+    handler: async (_args) => {
       // Spawn the MCP server as a stdio subprocess and forward the call
       // This is a simplified version — a full implementation would use
       // the MCP protocol over stdio
@@ -286,7 +287,11 @@ async function installFromGitHub(serverId) {
   } catch (e) {
     console.error(`❌ Failed to install ${serverId}: ${e.message}`);
     // Clean up partial clone
-    try { if (fs.existsSync(serverDir)) fs.rmSync(serverDir, { recursive: true, force: true }); } catch (e2) {}
+    try {
+      if (fs.existsSync(serverDir)) fs.rmSync(serverDir, { recursive: true, force: true });
+    } catch (e2) {
+      console.error(`⚠️  Cleanup failed: ${e2.message}`);
+    }
     throw e;
   }
 }

@@ -1,9 +1,6 @@
 # Tiger Code Pilot — Backend Piece
 
 > This document covers the backend half of the project.
-> Amazon Q is responsible for this piece.
-> Qwen Code Copilot is responsible for the Frontend/Extension piece (see FRONTEND_PIECE.md).
-> When Amazon Q delivers the real core-engine.js, it drops straight in — no frontend changes needed.
 
 ---
 
@@ -59,7 +56,7 @@ Add a `src/test/` suite that:
 ## API Contract (Backend → Frontend)
 
 The VS Code extension (`extension.ts`) calls the backend via direct Node.js `require()` — no HTTP, no sockets.
-Do not change these signatures — Qwen's frontend depends on them.
+Do not change these signatures — the frontend depends on them.
 
 ### Core Engine Methods
 ```js
