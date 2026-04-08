@@ -290,15 +290,20 @@ Commands:
   analyze <file>              Analyze code with AI
     --mode general|security|performance|bugs
 
-  chat                        Interactive AI chat (with condense support)
+  chat                        Interactive AI chat
   vibecode <action> [desc]    AI coding actions
     Actions: generate, explain, refactor, debug, convert, document, test, optimize
     --language <lang>   --file <path>
 
   concept / build / create    Start concept-to-reality build session
 
-  server [--port 3000]        Start Tiger Chat standalone backend server
-                              Endpoints: /health /chat /analyze /vibecode /condense
+  server [--port 3000]        Start Tiger Chat standalone backend
+  mcp install <id>            Install an MCP server from GitHub
+  mcp list [category]         List catalog or installed servers
+  mcp status                  Show deprecation status of installed servers
+  mcp remove <id>             Uninstall an MCP server
+  mcp search <query>          Search the MCP server catalog
+  mcp discover                Auto-discover and install from GitHub
 
   config                      Show current config
   config set <provider> <key> Save API key
@@ -316,10 +321,8 @@ Commands:
   version                     Show version
   help                        Show this help
 
-Providers: openai, anthropic, google, huggingface, groq, openrouter, ollama, lmstudio, local
-
+Providers: ollama, lmstudio, local (local-first, no API keys needed)
 Config: ${CONFIG_FILE}
-Env vars: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, etc.
 `, 'cyan');
 }
 
@@ -408,6 +411,80 @@ const command = args[0];
     case 'models': case 'model': case 'detect':
       providerRegistry.main();
       break;
+
+    case 'mcp': {
+      const sub = args[1];
+      const mcpLoader = require('./mcp-auto-loader');
+      const mcpReg = require('./mcp-registry');
+
+      if (sub === 'install' && args[2]) {
+        log(`📥 Installing MCP server: ${args[2]}...`, 'cyan');
+        try {
+          const result = await mcpLoader.installFromGitHub(args[2]);
+          if (result.status === 'installed') {
+            log(`✅ ${result.name} installed — ${result.toolsRegistered} tool(s) registered`, 'green');
+            if (result.deprecated) log(`⚠️  DEPRECATED: ${result.deprecationReason}`, 'yellow');
+          } else {
+            log(`ℹ️  Already installed: ${result.serverId}`, 'blue');
+          }
+        } catch (e) { log(`❌ ${e.message}`, 'red'); process.exit(1); }
+      } else if (sub === 'remove' && args[2]) {
+        const result = await mcpLoader.uninstallServer(args[2]);
+        log(result.status === 'uninstalled' ? `✅ Removed ${args[2]}` : `❌ Not installed: ${args[2]}`,
+          result.status === 'uninstalled' ? 'green' : 'yellow');
+      } else if (sub === 'status') {
+        const report = mcpLoader.getStatusReport();
+        if (!report.length) { log('No MCP servers installed', 'blue'); break; }
+        log('\n📦 Installed MCP Servers:', 'cyan');
+        log('━'.repeat(60), 'bright');
+        for (const s of report) {
+          const dep = s.deprecated ? ' ⚠️ DEPRECATED' : '';
+          const reason = s.deprecationReason ? ` (${s.deprecationReason})` : '';
+          log(`  ${s.name}${dep}${reason}`, s.deprecated ? 'yellow' : 'green');
+          log(`    Repo: ${s.repo} | Installed: ${new Date(s.installedAt).toLocaleDateString()}`, 'blue');
+        }
+      } else if (sub === 'list') {
+        const category = args[2];
+        const catalog = mcpReg.getCatalog();
+        const filtered = category ? catalog.filter(s => s.category === category) : catalog;
+        log('\n📚 MCP Server Catalog:', 'cyan');
+        log('━'.repeat(60), 'bright');
+        for (const s of filtered) {
+          const installed = s.installed ? '✅' : '  ';
+          const dep = s.deprecated ? ' ⚠️ DEPRECATED' : '';
+          log(`  ${installed} ${s.name}${dep}`);
+          log(`     ${s.description}`, 'blue');
+          log(`     Tools: ${s.tools.slice(0, 4).join(', ')}${s.tools.length > 4 ? '...' : ''}`, 'dim');
+          log('');
+        }
+      } else if (sub === 'search' && args[2]) {
+        const results = mcpReg.searchCatalog(args[2]);
+        if (!results.length) { log(`No servers matching "${args[2]}"`, 'yellow'); break; }
+        log(`\n🔍 Search: "${args[2]}"`, 'cyan');
+        for (const s of results) {
+          log(`  ${s.installed ? '✅' : '  '} ${s.name} [${s.category}]`);
+          log(`     ${s.description}`, 'blue');
+        }
+      } else if (sub === 'discover') {
+        log('🔍 Discovering MCP servers on GitHub...', 'cyan');
+        try {
+          const results = await mcpLoader.autoDiscoverAndInstall();
+          for (const r of results) {
+            log(`  ${r.status === 'installed' ? '✅' : r.status === 'failed' ? '❌' : '⏭️'} ${r.id}: ${r.status}${r.deprecated ? ' (deprecated, skipped)' : ''}`,
+              r.status === 'installed' ? 'green' : r.status === 'failed' ? 'red' : 'yellow');
+          }
+        } catch (e) { log(`❌ Discovery failed: ${e.message}`, 'red'); }
+      } else {
+        log('\n📦 MCP Server Management', 'cyan');
+        log('  mcp install <id>    Install from GitHub');
+        log('  mcp list [category] Browse catalog');
+        log('  mcp status          Deprecation status');
+        log('  mcp remove <id>     Uninstall');
+        log('  mcp search <query>  Search catalog');
+        log('  mcp discover        Auto-discover on GitHub');
+      }
+      break;
+    }
 
     case 'version':
       log(`Tiger Code Pilot v${VERSION}`, 'cyan');

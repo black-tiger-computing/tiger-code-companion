@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rmdir *)"
+      "Bash(rmdir *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(copy *)",
+      "Bash(git checkout *)",
+      "Bash(git stash)",
+      "Bash(git stash *)",
+      "Bash(git reset *)",
+      "Bash(git restore *)"
     ]
   },
   "$version": 3

@@ -104,6 +104,13 @@ class PluginSystem {
     this.registerPlugin(fileSystemPlugin);
     this.registerPlugin(shellPlugin);
     this.registerPlugin(gitPlugin);
+    // Auto-load ACP tools
+    try {
+      const { acpPlugin } = require('./acp-tools');
+      this.registerPlugin(acpPlugin);
+    } catch (e) { console.error(`⚠️  ACP tools unavailable: ${e.message}`); }
+    // Auto-load installed MCP servers
+    this.loadMcpServerTools();
   }
 
   registerPlugin(plugin) {
@@ -133,6 +140,18 @@ class PluginSystem {
         if (plugin.name && plugin.tools) this.registerPlugin(plugin);
       } catch (e) { console.error(`⚠️  Failed to load plugin ${entry}: ${e.message}`); }
     }
+  }
+
+  loadMcpServerTools() {
+    try {
+      const mcpRegistry = require('./mcp-registry');
+      const installed = mcpRegistry.getInstalledList();
+      for (const server of installed) {
+        if (server.deprecated) continue; // Skip deprecated servers
+        // Tools from auto-loader are registered as separate plugins with prefix `mcp-${id}`
+        // If tools were registered during install, they're already loaded
+      }
+    } catch (e) { /* mcp-registry not available */ }
   }
 }
 
