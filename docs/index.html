@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiger Code Companion - AI-Powered Coding Assistant</title>
+    <meta name="description" content="Open-source AI coding assistant with 100% local-first architecture. VS Code Extension, CLI, MCP Server, and Autonomous Agent.">
+    <link rel="icon" href="../images/icon.png" type="image/png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <img src="../images/logo.svg" alt="Tiger Code Companion" class="nav-logo">
+                <span class="brand-text">Tiger Code Companion</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#install">Install</a></li>
+                <li><a href="#providers">Providers</a></li>
+                <li><a href="#architecture">Architecture</a></li>
+                <li><a href="#roadmap">Roadmap</a></li>
+                <li><a href="https://github.com/black-tiger-computing/tiger-code-companion" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <img src="../images/tgclogo.jpg" alt="Tiger Code Companion" class="hero-logo">
+                <h1>AI-Powered Coding Assistant</h1>
+                <p class="hero-subtitle">VS Code Extension · CLI · MCP Server · Autonomous Agent</p>
+                <div class="hero-badges">
+                    <span class="badge">100% Local-First</span>
+                    <span class="badge">6 AI Providers</span>
+                    <span class="badge">27 Tests Passing</span>
+                    <span class="badge">Zero Data Egress</span>
+                </div>
+                <p class="hero-description">
+                    Run inference on your own hardware. Choose from 6 AI providers. Chat, analyze, refactor, debug, or let the autonomous agent build entire features from a single prompt. <strong>Your code never leaves your machine unless you want it to.</strong>
+                </p>
+                <div class="hero-cta">
+                    <a href="#install" class="btn btn-primary">Get Started</a>
+                    <a href="https://github.com/black-tiger-computing/tiger-code-companion" class="btn btn-secondary" target="_blank">View on GitHub</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Three Ways to Use -->
+    <section class="interfaces">
+        <div class="container">
+            <h2>Three Ways to Use It</h2>
+            <div class="interfaces-grid">
+                <div class="interface-card">
+                    <div class="interface-icon">
+                        <img src="../images/logo-vscode.svg" alt="VS Code">
+                    </div>
+                    <h3>VS Code Extension</h3>
+                    <p>Daily coding with AI chat panel</p>
+                    <span class="setup-time">2 minutes setup</span>
+                </div>
+                <div class="interface-card">
+                    <div class="interface-icon">💻</div>
+                    <h3>CLI Tool</h3>
+                    <p>Terminal-first workflows & scripts</p>
+                    <span class="setup-time">30 seconds setup</span>
+                </div>
+                <div class="interface-card">
+                    <div class="interface-icon">🤖</div>
+                    <h3>MCP Server</h3>
+                    <p>Claude Desktop, Cursor, AI agents</p>
+                    <span class="setup-time">1 minute setup</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2>🛠️ Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Multi-Provider AI Router</h3>
+                    <p>Automatic fallback chain: if one provider fails, it tries the next. No single point of failure.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Vibecode Actions</h3>
+                    <p>Natural-language driven code workflows: generate, explain, refactor, debug, convert, document, test, optimize</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Autonomous Local Agent</h3>
+                    <p>Give the agents a goal and it plans and executes: scaffolding → model design → route generation → test writing → execution → self-correction</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Model Context Protocol (MCP)</h3>
+                    <p>Exposes 15+ tools over stdio or HTTP for AI clients like Claude Desktop, Cursor, or any MCP-compatible agent</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Session Condensation</h3>
+                    <p>Long conversations? Automatically condense 100+ message histories into a concise summary. Never lose context.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Security-First Design</h3>
+                    <p>Path traversal protection, config validation, API key encryption, and strict execution sandboxing</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Install Section -->
+    <section id="install" class="install">
+        <div class="container">
+            <h2>⚡ Install in 60 Seconds</h2>
+            <p class="section-subtitle">No npm account needed. Clone and run:</p>
+            <div class="code-block">
+                <pre><code># 1. Clone the repository
+git clone https://github.com/black-tiger-computing/tiger-code-companion.git
+cd tiger-code-companion
+
+# 2. Install dependencies
+npm install
+
+# 3. Compile TypeScript
+npm run compile
+
+# 4. Run setup wizard (interactive model selection)
+node src/cli.js setup
+
+# 5. Start using it!
+node src/cli.js chat</code></pre>
+            </div>
+            <div class="install-options">
+                <h3>Quick Commands</h3>
+                <div class="command-grid">
+                    <div class="command-item">
+                        <code>tiger-code-pilot analyze src/app.js --mode security</code>
+                        <span>Analyze code for security issues</span>
+                    </div>
+                    <div class="command-item">
+                        <code>tiger-code-pilot vibecode generate "a REST API in Python"</code>
+                        <span>Generate code from natural language</span>
+                    </div>
+                    <div class="command-item">
+                        <code>tiger-code-pilot agent</code>
+                        <span>Start autonomous agent</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AI Providers -->
+    <section id="providers" class="providers">
+        <div class="container">
+            <h2>🧠 AI Providers — Free & Local</h2>
+            <p class="section-subtitle">Choose what works for you. Mix and match at any time.</p>
+            <table class="providers-table">
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Cost</th>
+                        <th>Speed</th>
+                        <th>Setup</th>
+                        <th>Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Ollama</strong></td>
+                        <td>Free (Local)</td>
+                        <td>Model-dependent</td>
+                        <td><code>ollama pull llama3.2</code></td>
+                        <td>100% offline</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LM Studio</strong></td>
+                        <td>Free (Local)</td>
+                        <td>Model-dependent</td>
+                        <td>Download app</td>
+                        <td>Easy local setup</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Qwen (Alibaba)</strong></td>
+                        <td>Free tier (2K req/day)</td>
+                        <td>Fast</td>
+                        <td>Get API key</td>
+                        <td>Code generation ⭐</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Groq</strong></td>
+                        <td>Free tier</td>
+                        <td>Very Fast</td>
+                        <td>Get API key</td>
+                        <td>Quick responses</td>
+                    </tr>
+                    <tr>
+                        <td><strong>HuggingFace</strong></td>
+                        <td>Free tier (rate limited)</td>
+                        <td>Moderate</td>
+                        <td>Get token</td>
+                        <td>Model variety</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="providers-note">
+                <p><strong>100% Local Option:</strong> Install Ollama, pull any model, and you're done. No API keys, no internet required.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section id="architecture" class="architecture">
+        <div class="container">
+            <h2>🏗️ Architecture</h2>
+            <div class="architecture-diagram">
+                <img src="../images/logo-dark-core.svg" alt="Architecture Diagram" class="diagram-image">
+            </div>
+            <div class="architecture-description">
+                <p>The system consists of three main interfaces (CLI, VS Code Extension, Local Agent) that connect to a Core Engine (AI Router), which routes requests to multiple AI providers through an abstraction layer.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <h2>📊 Stats</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">~15,000+</div>
+                    <div class="stat-label">Lines of Code</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">27</div>
+                    <div class="stat-label">Integration Tests</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">6</div>
+                    <div class="stat-label">AI Providers</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">15+</div>
+                    <div class="stat-label">MCP Tools</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">Zero</div>
+                    <div class="stat-label">Data Egress</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">MIT</div>
+                    <div class="stat-label">License</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Roadmap Section -->
+    <section id="roadmap" class="roadmap">
+        <div class="container">
+            <h2>🗺️ Roadmap</h2>
+            <div class="roadmap-timeline">
+                <div class="roadmap-item completed">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.1 — Core Infrastructure</h3>
+                        <p>CLI, provider registry, model catalog, HTTP/MCP servers</p>
+                        <span class="roadmap-status">✅ Shipped</span>
+                    </div>
+                </div>
+                <div class="roadmap-item completed">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.2 — Provider Integration</h3>
+                        <p>Qwen, Groq, HuggingFace, Ollama, LM Studio support</p>
+                        <span class="roadmap-status">✅ Shipped</span>
+                    </div>
+                </div>
+                <div class="roadmap-item completed">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.3 — Agent Foundation</h3>
+                        <p>Intent classifier, session condensation, autonomous planning</p>
+                        <span class="roadmap-status">✅ Shipped</span>
+                    </div>
+                </div>
+                <div class="roadmap-item completed">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.4 — Production Ready</h3>
+                        <p>27 tests, security hardening, zero compilation errors</p>
+                        <span class="roadmap-status">✅ Shipped</span>
+                    </div>
+                </div>
+                <div class="roadmap-item in-progress">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.5 — Plugin System</h3>
+                        <p>File System, Git, Terminal, Linter, Test plugins</p>
+                        <span class="roadmap-status">🚧 In Progress</span>
+                    </div>
+                </div>
+                <div class="roadmap-item planned">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.6 — Concept-to-Reality</h3>
+                        <p>Interactive guided build sessions</p>
+                        <span class="roadmap-status">⏳ Planned</span>
+                    </div>
+                </div>
+                <div class="roadmap-item planned">
+                    <div class="roadmap-marker"></div>
+                    <div class="roadmap-content">
+                        <h3>v0.7 — Multi-Agent</h3>
+                        <p>Coordinated autonomous teams</p>
+                        <span class="roadmap-status">⏳ Planned</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="../images/logo.svg" alt="Tiger Code Companion" class="footer-logo">
+                    <h3>Tiger Code Companion</h3>
+                    <p>AI-Powered Coding Assistant</p>
+                </div>
+                <div class="footer-links">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="https://github.com/black-tiger-computing/tiger-code-companion" target="_blank">GitHub Repository</a></li>
+                        <li><a href="https://github.com/black-tiger-computing/tiger-code-companion/issues" target="_blank">Issues</a></li>
+                        <li><a href="https://github.com/black-tiger-computing/tiger-code-companion/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a></li>
+                        <li><a href="https://github.com/black-tiger-computing/tiger-code-companion/blob/main/CODE_OF_CONDUCT.md" target="_blank">Code of Conduct</a></li>
+                    </ul>
+                </div>
+                <div class="footer-support">
+                    <h4>Support</h4>
+                    <a href="https://www.buymeacoffee.com/blacktigercomputing" target="_blank" class="support-btn">☕ Buy Me A Coffee</a>
+                    <p>Star the repo, report bugs, submit PRs, share with friends</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2026 Black Tiger Computing. Built with ❤️ for developers who value privacy.</p>
+                <p>Licensed under <a href="https://github.com/black-tiger-computing/tiger-code-companion/blob/main/LICENSE" target="_blank">MIT License</a></p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
