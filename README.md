@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://www.buymeacoffee.com/blacktigercomputing" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="36">
+  </a>
+</p>
+
+<p align="center">
   <a href="#-install-in-60-seconds">Install</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-architecture">Architecture</a> ·
@@ -344,6 +350,27 @@ tiger-code-companion/
     ├── COMMANDS.md
     └── CONTRIBUTING.md
 ```
+
+---
+
+## ☕ Support This Project
+
+Tiger Code Companion is **free and open-source** — built by developers who believe your code should stay yours.
+
+If this project helps you, consider supporting its development:
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/blacktigercomputing" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48">
+  </a>
+</p>
+
+**Other ways to help:**
+- ⭐ Star this repo (it's free and helps others find it)
+- 🐛 Report bugs via [GitHub Issues](https://github.com/black-tiger-computing/tiger-code-companion/issues)
+- 🔧 Submit a pull request
+- 📖 Improve the documentation
+- 📣 Share it with a friend
 
 ---
 
