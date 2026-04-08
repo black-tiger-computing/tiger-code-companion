@@ -72,7 +72,7 @@
         ]
     },
     "name": "tiger-code-pilot",
-    "homepage": "https://github.com/tiger-code-pilot/tiger-code-pilot",
+    "homepage": "https://github.com/black-tiger-computing/tiger-code-companion",
     "main": "./dist/extension.js",
     "activationEvents": [
         "onCommand:codePilot.start",
@@ -81,11 +81,11 @@
     "publisher": "tiger-code-pilot",
     "description": "AI-powered coding assistant with MCP server, CLI, vibecoding, and natural language chat.",
     "bugs": {
-        "url": "https://github.com/tiger-code-pilot/tiger-code-pilot/issues"
+        "url": "https://github.com/black-tiger-computing/tiger-code-companion/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/tiger-code-pilot/tiger-code-pilot.git"
+        "url": "https://github.com/black-tiger-computing/tiger-code-companion.git"
     },
     "engines": {
         "vscode": "^1.90.0"
