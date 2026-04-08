@@ -3,32 +3,15 @@
 /**
  * Tiger Code Pilot — Backend Integration Tests
  * Run: npm test  or  node src/test/backend.test.js
- * No external test framework — pure Node.js assert + axios mock.
+ * No external test framework — pure Node.js assert.
+ *
+ * Strategy: Patch provider modules after loading so core-engine routes through them.
  */
 
 const assert = require('assert');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-
-// ─── Mock axios before requiring any backend modules ─────────────────────────
-
-let _mockResponse = { data: { choices: [{ message: { content: 'mock response' } }] }, status: 200 };
-let _callCount = 0;
-
-const axiosMock = {
-  post: async () => { _callCount++; return _mockResponse; },
-  get: async (url) => {
-    if (url.includes('11434')) return { status: 200, data: { models: [{ name: 'llama3.2' }] } };
-    if (url.includes('1234'))  return { status: 200, data: { data: [{ id: 'phi-3' }] } };
-    throw new Error('not found');
-  },
-  isAxiosError: (e) => !!e.response
-};
-
-require.cache[require.resolve('axios')] = {
-  id: 'axios', filename: require.resolve('axios'), loaded: true, exports: axiosMock
-};
 
 // ─── Temp config dir so tests never touch real user config ────────────────────
 
@@ -37,13 +20,34 @@ fs.mkdirSync(TEST_HOME, { recursive: true });
 const _realHomedir = os.homedir;
 os.homedir = () => TEST_HOME;
 
-// Load modules after patching
+// Load modules
 const { getCoreEngine, loadConfig, saveConfig, repairConfig } = require('../core-engine');
 const { safePath } = require('../local-agent');
 const {
   detectLocalProviders, setActiveProvider, setProviderApiKey,
   getProviderApiKey, PROVIDER_REGISTRY, MODEL_CATALOG
 } = require('../provider-registry');
+
+// ─── Mock all three provider modules ─────────────────────────────────────────
+
+let _callCount = 0;
+
+function patchProvider(mod, content = 'mock response') {
+  if (mod.callOllama)      mod.callOllama = async () => { _callCount++; return content; };
+  if (mod.callOllamaStream) mod.callOllamaStream = async (msgs, cb) => { _callCount++; cb(content); };
+  if (mod.callLMStudio)     mod.callLMStudio = async () => { _callCount++; return content; };
+  if (mod.callLMStudioStream) mod.callLMStudioStream = async (msgs, cb) => { _callCount++; cb(content); };
+  if (mod.callLocal)        mod.callLocal = async () => { _callCount++; return content; };
+  if (mod.callLocalStream)  mod.callLocalStream = async (msgs, cb) => { _callCount++; cb(content); };
+  if (mod.checkHealth)      mod.checkHealth = async () => true;
+}
+
+const ollamaMod = require('../providers/ollama');
+const lmstudioMod = require('../providers/lmstudio');
+const localMod = require('../providers/local');
+patchProvider(ollamaMod);
+patchProvider(lmstudioMod);
+patchProvider(localMod);
 
 // ─── Runner ───────────────────────────────────────────────────────────────────
 
@@ -61,10 +65,11 @@ async function test(name, fn) {
   }
 }
 
-function resetMock(response) {
+function resetMock(content = 'mock response') {
   _callCount = 0;
-  _mockResponse = response || { data: { choices: [{ message: { content: 'mock response' } }] }, status: 200 };
-  axiosMock.post = async () => { _callCount++; return _mockResponse; };
+  patchProvider(ollamaMod, content);
+  patchProvider(lmstudioMod, content);
+  patchProvider(localMod, content);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -144,22 +149,29 @@ async function main() {
     assert.strictEqual(result, 'mock response');
   });
 
-  await test('retry logic retries on 429 then succeeds', async () => {
+  await test('retry logic retries on failure then succeeds', async () => {
     let attempts = 0;
-    axiosMock.post = async () => {
+    const origFn = ollamaMod.callOllama;
+    ollamaMod.callOllama = async () => {
       attempts++;
-      if (attempts < 3) { const e = new Error('rate limited'); e.response = { status: 429 }; throw e; }
-      return { data: { choices: [{ message: { content: 'success after retry' } }] }, status: 200 };
+      if (attempts < 3) {
+        const e = new Error('rate limited');
+        e.response = { status: 429 };
+        throw e;
+      }
+      return 'success after retry';
     };
     const result = await getCoreEngine().chat('retry test', 'retry-session');
     assert.strictEqual(result, 'success after retry');
     assert.strictEqual(attempts, 3);
+    ollamaMod.callOllama = origFn;
     resetMock();
   });
 
   await test('retry does not retry on 400', async () => {
     let attempts = 0;
-    axiosMock.post = async () => {
+    const origFn = ollamaMod.callOllama;
+    ollamaMod.callOllama = async () => {
       attempts++;
       const e = new Error('bad request');
       e.response = { status: 400 };
@@ -167,6 +179,7 @@ async function main() {
     };
     await assert.rejects(() => getCoreEngine().chat('bad', 'bad-session'));
     assert.strictEqual(attempts, 1);
+    ollamaMod.callOllama = origFn;
     resetMock();
   });
 
@@ -287,7 +300,7 @@ async function main() {
   console.log('\n💬 Session Condense');
 
   await test('condenseSession replaces messages with summary', async () => {
-    axiosMock.post = async () => ({ data: { choices: [{ message: { content: 'condensed summary' } }] }, status: 200 });
+    resetMock('condensed summary');
 
     const histFile = path.join(TEST_HOME, '.tiger-code-pilot', 'chat-history.json');
     const fakeHistory = Array.from({ length: 6 }, (_, i) => ({
@@ -305,8 +318,6 @@ async function main() {
     const session = history.filter(m => m.sessionId === 'condense-test');
     assert.strictEqual(session.length, 1, 'should be condensed to 1 entry');
     assert.ok(session[0].content.includes('condensed summary'));
-
-    resetMock();
   });
 
   // ── Results ──────────────────────────────────────────────────────────────────

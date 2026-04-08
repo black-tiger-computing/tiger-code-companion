@@ -12,30 +12,29 @@ const MODE_OPTIONS = [
 ];
 
 const MODEL_PRESETS: Record<string, string[]> = {
-  openai: ['gpt-4o-mini', 'gpt-4o', 'text-davinci-003'],
-  huggingface: ['gpt2', 'distilgpt2', 'microsoft/DialoGPT-medium', 'Salesforce/codegen-350M-mono'],
   ollama: ['llama3.2', 'llama3.1', 'codellama', 'deepseek-coder', 'mistral', 'phi3'],
+  lmstudio: ['any-loaded-model'],
   local: ['llama2', 'llama3', 'mistral']
 };
 
-// Free models that work without API keys
-const FREE_MODELS = [
-  {
-    id: 'hf-free',
-    name: 'HuggingFace Free Tier',
-    provider: 'huggingface' as Provider,
-    model: 'Salesforce/codegen-350M-mono',
-    endpointUrl: 'https://api-inference.huggingface.co/models/Salesforce/codegen-350M-mono',
-    description: 'Free code generation model - no API key required',
-    requiresApiKey: false
-  },
+// Local models — no API keys needed
+const LOCAL_MODELS = [
   {
     id: 'ollama-local',
     name: 'Ollama (Local)',
     provider: 'ollama' as Provider,
     model: 'llama3.2',
-    endpointUrl: 'http://localhost:11434/api/generate',
-    description: 'Run models locally - no API key needed',
+    endpointUrl: 'http://localhost:11434/api/chat',
+    description: 'Run models locally — no API key needed',
+    requiresApiKey: false
+  },
+  {
+    id: 'lmstudio-local',
+    name: 'LM Studio (Local)',
+    provider: 'lmstudio' as Provider,
+    model: '',
+    endpointUrl: 'http://localhost:1234/v1/chat/completions',
+    description: 'Any model loaded in LM Studio',
     requiresApiKey: false
   }
 ];
@@ -84,7 +83,7 @@ const QUICK_START_PRESETS = [
   }
 ];
 
-type Provider = 'openai' | 'huggingface' | 'ollama' | 'local';
+type Provider = 'ollama' | 'lmstudio' | 'local';
 
 interface CopilotState {
   mode: string;
@@ -120,11 +119,11 @@ interface StorageData {
 function getInitialState(): CopilotState {
   return {
     mode: 'develop',
-    provider: 'openai',
-    model: 'gpt-4o-mini',
+    provider: 'ollama',
+    model: 'llama3.2',
     preset: '',
     apiKey: '',
-    endpointUrl: 'https://api.openai.com/v1/chat/completions',
+    endpointUrl: 'http://localhost:11434/api/chat',
     prompt: '',
     codeInput: ''
   };
@@ -139,24 +138,12 @@ const STORAGE_KEYS = {
   STORAGE_DATA: 'tigerCodePilot.storageData'
 };
 
-// Secret storage keys
-const SECRET_KEYS = {
-  OPENAI_API_KEY: 'tigerCodePilot.openai.apiKey',
-  HUGGINGFACE_API_KEY: 'tigerCodePilot.huggingface.apiKey',
-  OLLAMA_API_KEY: 'tigerCodePilot.ollama.apiKey',
-  LOCAL_API_KEY: 'tigerCodePilot.local.apiKey'
-};
-
-function getSecretKeyForProvider(provider: Provider): string {
+function getEndpointUrlForProvider(provider: Provider, endpointUrl?: string): string {
+  if (endpointUrl) return endpointUrl;
   switch (provider) {
-    case 'openai':
-      return SECRET_KEYS.OPENAI_API_KEY;
-    case 'huggingface':
-      return SECRET_KEYS.HUGGINGFACE_API_KEY;
-    case 'ollama':
-      return SECRET_KEYS.OLLAMA_API_KEY;
-    case 'local':
-      return SECRET_KEYS.LOCAL_API_KEY;
+    case 'ollama':   return 'http://localhost:11434/api/chat';
+    case 'lmstudio': return 'http://localhost:1234/v1/chat/completions';
+    case 'local':    return 'http://localhost:8080/v1/chat/completions';
   }
 }
 
@@ -165,21 +152,8 @@ function getModelOptions(provider: string): string {
   return presets.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
-function getEndpointUrlForProvider(provider: Provider, endpointUrl?: string): string {
-  if (endpointUrl) {
-    return endpointUrl;
-  }
-  switch (provider) {
-    case 'openai':
-      return 'https://api.openai.com/v1/chat/completions';
-    case 'huggingface':
-      return 'https://api-inference.huggingface.co/models/';
-    case 'ollama':
-      return 'http://localhost:11434/api/generate';
-    case 'local':
-      return 'http://localhost:8080/v1/chat/completions';
-  }
-}
+// Deprecated but kept for backward compat with existing config
+const FREE_MODELS = LOCAL_MODELS;
 
 const ANALYSIS_PROMPTS = {
   general: `Analyze the following code and provide a comprehensive review covering:
@@ -225,7 +199,7 @@ For each bug found, explain the issue and provide the corrected code.`
 
 async function showOnboarding(context: vscode.ExtensionContext): Promise<void> {
   const choice = await vscode.window.showInformationMessage(
-    'Tiger Code Pilot\n\nYour AI-powered coding assistant with:\n- Multi-provider support (OpenAI, HuggingFace, Ollama)\n- Code analysis & review\n- Smart prompt templates\n- Local storage for prompts & snippets\n\nReady to get started?',
+    'Tiger Code Pilot\n\nYour local AI coding assistant with:\n- Ollama, LM Studio, or custom local server\n- Code analysis & review\n- Smart prompt templates\n- All inference runs on your hardware\n\nReady to get started?',
     { modal: true },
     'Quick Start',
     'Configure Provider',
@@ -233,53 +207,33 @@ async function showOnboarding(context: vscode.ExtensionContext): Promise<void> {
   );
 
   if (choice === 'Quick Start') {
-    // Show quick start panel with free models
     const quickStartChoice = await vscode.window.showQuickPick(
       [
         {
-          label: '[HF] Try Free Model (HuggingFace)',
-          description: 'Start coding with no API key required',
-          detail: 'Uses Salesforce CodeGen free model'
+          label: '[OL] Use Ollama',
+          description: 'Run models locally',
+          detail: 'Install from https://ollama.ai'
         },
         {
-          label: '[OL] Use Local Ollama',
-          description: 'Run models on your machine',
-          detail: 'No API key needed, fully private'
+          label: '[LM] Use LM Studio',
+          description: 'Any model loaded in LM Studio',
+          detail: 'Install from https://lmstudio.ai'
         },
         {
-          label: '[OA] Configure OpenAI',
-          description: 'Use GPT-4o models',
-          detail: 'Requires OpenAI API key'
+          label: '[LOC] Custom Local Server',
+          description: 'llama.cpp, text-gen-webui, etc.',
+          detail: 'OpenAI-compatible endpoint'
         }
       ],
-      {
-        placeHolder: 'Choose how to get started...'
-      }
+      { placeHolder: 'Choose your local AI provider...' }
     );
 
-    if (quickStartChoice?.label.includes('HuggingFace')) {
-      // Set up HuggingFace free model
-      context.globalState.update(STORAGE_KEYS.PROVIDER, 'huggingface');
-      context.globalState.update(STORAGE_KEYS.MODEL, 'Salesforce/codegen-350M-mono');
-      context.globalState.update(STORAGE_KEYS.ENDPOINT_URL, 'https://api-inference.huggingface.co/models/Salesforce/codegen-350M-mono');
-
-      vscode.window.showInformationMessage(
-        'Free model configured! Run "Tiger Code Pilot: Open Chat" to start coding.',
-        'Open Chat'
-      ).then(selection => {
-        if (selection === 'Open Chat') {
-          loadStoredState(context).then(state => {
-            openCopilotPanel(context, state);
-          });
-        }
-      });
-    } else if (quickStartChoice?.label.includes('Ollama')) {
-      // Test Ollama connection
+    if (quickStartChoice?.label.includes('Ollama')) {
       const ollamaRunning = await testOllamaConnection();
       if (ollamaRunning) {
         context.globalState.update(STORAGE_KEYS.PROVIDER, 'ollama');
         context.globalState.update(STORAGE_KEYS.MODEL, 'llama3.2');
-        context.globalState.update(STORAGE_KEYS.ENDPOINT_URL, 'http://localhost:11434/api/generate');
+        context.globalState.update(STORAGE_KEYS.ENDPOINT_URL, 'http://localhost:11434/api/chat');
 
         vscode.window.showInformationMessage(
           'Ollama configured! Run "Tiger Code Pilot: Open Chat" to start.',
@@ -297,31 +251,36 @@ async function showOnboarding(context: vscode.ExtensionContext): Promise<void> {
           'Learn More'
         );
       }
-    } else if (quickStartChoice?.label.includes('OpenAI')) {
-      const apiKey = await vscode.window.showInputBox({
-        prompt: 'Enter your OpenAI API key',
-        password: true,
-        placeHolder: 'sk-...',
-        ignoreFocusOut: true
+    } else if (quickStartChoice?.label.includes('LM Studio')) {
+      context.globalState.update(STORAGE_KEYS.PROVIDER, 'lmstudio');
+      context.globalState.update(STORAGE_KEYS.MODEL, '');
+      context.globalState.update(STORAGE_KEYS.ENDPOINT_URL, 'http://localhost:1234/v1/chat/completions');
+
+      vscode.window.showInformationMessage(
+        'LM Studio configured! Load a model in LM Studio, then open chat.',
+        'Open Chat'
+      ).then(selection => {
+        if (selection === 'Open Chat') {
+          loadStoredState(context).then(state => {
+            openCopilotPanel(context, state);
+          });
+        }
       });
+    } else if (quickStartChoice?.label.includes('Custom')) {
+      context.globalState.update(STORAGE_KEYS.PROVIDER, 'local');
+      context.globalState.update(STORAGE_KEYS.MODEL, '');
+      context.globalState.update(STORAGE_KEYS.ENDPOINT_URL, 'http://localhost:8080/v1/chat/completions');
 
-      if (apiKey) {
-        await saveApikey(context, 'openai', apiKey);
-        context.globalState.update(STORAGE_KEYS.PROVIDER, 'openai');
-        context.globalState.update(STORAGE_KEYS.MODEL, 'gpt-4o-mini');
-        context.globalState.update(STORAGE_KEYS.ENDPOINT_URL, 'https://api.openai.com/v1/chat/completions');
-
-        vscode.window.showInformationMessage(
-          'OpenAI configured! Your API key is stored securely.',
-          'Open Chat'
-        ).then(selection => {
-          if (selection === 'Open Chat') {
-            loadStoredState(context).then(state => {
-              openCopilotPanel(context, state);
-            });
-          }
-        });
-      }
+      vscode.window.showInformationMessage(
+        'Custom local server configured. Update endpoint URL if needed.',
+        'Open Chat'
+      ).then(selection => {
+        if (selection === 'Open Chat') {
+          loadStoredState(context).then(state => {
+            openCopilotPanel(context, state);
+          });
+        }
+      });
     }
   } else if (choice === 'Configure Provider') {
     vscode.commands.executeCommand('codePilot.openChat');
@@ -435,15 +394,14 @@ async function analyzeCode(context: vscode.ExtensionContext, state: CopilotState
     return;
   }
 
-  // Check if API key is set
-  const secretKey = getSecretKeyForProvider(state.provider);
-  const savedApiKey = await context.secrets.get(secretKey);
+  // Check if API key is set (local providers don't need one)
+  const savedApiKey = await context.secrets.get(`tigerCodePilot.${state.provider}.apiKey`);
 
   if (!savedApiKey && !state.apiKey) {
     const apiKeyInput = await vscode.window.showInputBox({
-      prompt: `Enter API key for ${state.provider}`,
+      prompt: `Enter API key for ${state.provider} (optional for local providers)`,
       password: true,
-      placeHolder: 'sk-...',
+      placeHolder: 'key...',
       ignoreFocusOut: true
     });
 
@@ -566,8 +524,7 @@ async function loadStoredState(context: vscode.ExtensionContext): Promise<Copilo
   }
 
   // Load API key from secret storage
-  const secretKey = getSecretKeyForProvider(state.provider);
-  const savedApiKey = await context.secrets.get(secretKey);
+  const savedApiKey = await context.secrets.get(`tigerCodePilot.${state.provider}.apiKey`);
   if (savedApiKey) {
     state.apiKey = savedApiKey;
   }
@@ -576,8 +533,7 @@ async function loadStoredState(context: vscode.ExtensionContext): Promise<Copilo
 }
 
 async function saveApikey(context: vscode.ExtensionContext, provider: Provider, apiKey: string): Promise<void> {
-  const secretKey = getSecretKeyForProvider(provider);
-  await context.secrets.store(secretKey, apiKey);
+  await context.secrets.store(`tigerCodePilot.${provider}.apiKey`, apiKey);
 }
 
 function getStorageData(context: vscode.ExtensionContext): StorageData {
@@ -689,10 +645,9 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
     <div>
       <label>Provider</label>
       <select id="provider">
-        <option value="openai" ${state.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-        <option value="huggingface" ${state.provider === 'huggingface' ? 'selected' : ''}>HuggingFace</option>
         <option value="ollama" ${state.provider === 'ollama' ? 'selected' : ''}>Ollama</option>
-        <option value="local" ${state.provider === 'local' ? 'selected' : ''}>Local</option>
+        <option value="lmstudio" ${state.provider === 'lmstudio' ? 'selected' : ''}>LM Studio</option>
+        <option value="local" ${state.provider === 'local' ? 'selected' : ''}>Custom Local Server</option>
       </select>
     </div>
   </div>
@@ -704,12 +659,7 @@ function getWebviewHtml(state: CopilotState, storageData: StorageData): string {
     ${savedModelsOptions}
   </select>
 
-  <label>API Key</label>
-  <input type="password" id="apiKey" placeholder="Enter API key (saved securely)" value="${state.apiKey ? '••••••••••••' : ''}" />
-  <div class="status">🔒 API keys are stored securely in VS Code's secret storage</div>
-  <div class="status">💡 Tip: HuggingFace and Ollama offer free models that don't require API keys</div>
-
-  <label>Endpoint URL (optional - auto-detected for providers)</label>
+  <label>Endpoint URL (auto-detected for local providers)</label>
   <input type="text" id="endpointUrl" placeholder="${getEndpointUrlForProvider(state.provider)}" value="${state.endpointUrl}" />
 
   <div class="storage-section">
